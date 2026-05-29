@@ -1,0 +1,42 @@
+seed: 123
+
+smiles_txt_path: "data/smiles_200.txt"
+checkpoint: "checkpoints/3d_infomax_checkpoint.pt"
+out_path: "out_smiles"
+
+model_parameters:
+  aggregators:
+    - mean
+    - max
+    - min
+    - std
+
+  batch_norm_momentum: 0.93
+  dropout: 0.0
+  hidden_dim: 200
+
+  last_batch_norm: true
+  mid_batch_norm: true
+
+  posttrans_layers: 1
+  pretrans_layers: 2
+
+  propagation_depth: 7
+
+  readout_aggregators:
+    - min
+    - max
+    - mean
+
+  readout_batchnorm: true
+  readout_hidden_dim: 200
+  readout_layers: 2
+
+  residual: true
+
+  scalers:
+    - identity
+    - amplification
+    - attenuation
+
+  target_dim: 256
