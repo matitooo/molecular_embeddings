@@ -81,3 +81,10 @@ def smiles_to_data(smiles: str) -> Data:
         edge_index=torch.LongTensor(edge_index).t().contiguous(),
         edge_attr=torch.FloatTensor(edge_attr),
     )
+
+
+dict(zip [Chem.rdchem.HybridizationType.SP,
+                Chem.rdchem.HybridizationType.SP2,
+                Chem.rdchem.HybridizationType.SP3,
+                Chem.rdchem.HybridizationType.SP3D,
+                Chem.rdchem.HybridizationType.SP3D2],[i for i in range(6)]))
