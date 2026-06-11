@@ -1,12 +1,8 @@
 from rdkit import Chem
 from rdkit.Chem import MolFromSmiles
 import torch
-from torch_geometric.data import Data, Batch
-from tqdm import tqdm
-from concurrent.futures import ProcessPoolExecutor
-import os
+from torch_geometric.data import Data
 
-_GLOBAL_DICTS = None
 
 def return_dicts():
     return {
@@ -35,34 +31,43 @@ def return_dicts():
         }
     }
 
+
 def read_data(data_path):
     with open(data_path, 'r') as f:
         return [s for s in f.read().splitlines() if s.strip()]
+
 
 def encode(value, mapping):
     out = torch.zeros(len(mapping) + 1)
     out[mapping.get(value, len(mapping))] = 1
     return out
 
+
 def encode_num(value, values):
     out = torch.zeros(len(values) + 1)
     out[value if value in values else len(values)] = 1
     return out
 
+
 def atom_encoding(atom, dicts):
     vc = {}
+
     vc['atom_symbol'] = encode(atom.GetSymbol(), dicts['symbol_dict'])
     vc['degree'] = encode_num(atom.GetDegree(), list(range(10)))
     vc['charge'] = torch.tensor([atom.GetFormalCharge()], dtype=torch.float)
     vc['radical_electrons'] = torch.tensor([atom.GetNumRadicalElectrons()], dtype=torch.float)
+
     vc['hybridization'] = encode(atom.GetHybridization(), dicts['hybridization_dict'])
     vc['aromatic'] = torch.tensor([int(atom.GetIsAromatic())], dtype=torch.float)
     vc['total_h'] = encode_num(atom.GetTotalNumHs(), list(range(5)))
+
     chirality = atom.GetProp('_CIPCode') if atom.HasProp('_CIPCode') else 'OTHER'
     if chirality not in dicts['chirality_dict']:
         chirality = 'OTHER'
+
     vc['chirality'] = encode(chirality, dicts['chirality_dict'])
     vc['chirality_center'] = torch.tensor([int(atom.HasProp('_ChiralityPossible'))], dtype=torch.float)
+
     order = [
         'atom_symbol',
         'degree',
@@ -74,18 +79,24 @@ def atom_encoding(atom, dicts):
         'chirality',
         'chirality_center'
     ]
+
     return torch.cat([vc[k] for k in order], dim=0)
+
 
 def mole_encoding(mol, dicts):
     return torch.stack([atom_encoding(a, dicts) for a in mol.GetAtoms()])
 
+
 def bond_encoding(mol, dicts):
     edge_index = []
     edge_attr = []
+
     for bond in mol.GetBonds():
         i = bond.GetBeginAtomIdx()
         j = bond.GetEndAtomIdx()
+
         bt = bond.GetBondType()
+
         basic = torch.tensor([
             bt == Chem.rdchem.BondType.SINGLE,
             bt == Chem.rdchem.BondType.DOUBLE,
@@ -94,52 +105,38 @@ def bond_encoding(mol, dicts):
             bond.GetIsConjugated(),
             bond.IsInRing()
         ], dtype=torch.float)
+
         stereo = encode(bond.GetStereo(), dicts['stereo_dict']).float()
+
         feat = torch.cat([basic, stereo])
+
         edge_index.append([i, j])
         edge_index.append([j, i])
+
         edge_attr.append(feat)
         edge_attr.append(feat)
+
     if len(edge_attr) == 0:
         edge_index = torch.empty((2, 0), dtype=torch.long)
         edge_attr = torch.empty((0, 11), dtype=torch.float)
         return edge_index, edge_attr
+
     edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
     edge_attr = torch.stack(edge_attr)
+
     return edge_index, edge_attr
 
-def init_worker(dicts):
-    global _GLOBAL_DICTS
-    _GLOBAL_DICTS = dicts
 
-def process_smile(smile):
-    global _GLOBAL_DICTS
-    mol = MolFromSmiles(smile)
+def smiles_to_data(smiles, dicts):
+    mol = MolFromSmiles(smiles)
     if mol is None:
-        return None
-    x = mole_encoding(mol, _GLOBAL_DICTS)
-    edge_index, edge_attr = bond_encoding(mol, _GLOBAL_DICTS)
-    return Data(x=x.float(), edge_index=edge_index, edge_attr=edge_attr.float())
+        raise ValueError(smiles)
 
-def smiles_to_batch(smiles_list, dicts, batch_size=None, num_workers=None):
-    if num_workers is None:
-        num_workers = os.cpu_count()
-    with ProcessPoolExecutor(
-        max_workers=num_workers,
-        initializer=init_worker,
-        initargs=(dicts,)
-    ) as executor:
-        embeddings = list(
-            tqdm(
-                executor.map(process_smile, smiles_list, chunksize=50),
-                total=len(smiles_list),
-                desc="Molecule feature extraction"
-            )
-        )
-    embeddings = [e for e in embeddings if e is not None]
-    if batch_size is None:
-        return Batch.from_data_list(embeddings)
-    return [
-        Batch.from_data_list(embeddings[i:i + batch_size])
-        for i in range(0, len(embeddings), batch_size)
-    ]
+    x = mole_encoding(mol, dicts)
+    edge_index, edge_attr = bond_encoding(mol, dicts)
+
+    return Data(
+        x=x.float(),
+        edge_index=edge_index,
+        edge_attr=edge_attr.float()
+    )

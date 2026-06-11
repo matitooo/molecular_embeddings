@@ -1,6 +1,7 @@
 import torch
-from torch_geometric.data import Data
 import numpy as np
+
+from torch_geometric.data import Data
 from rdkit import Chem
 from rdkit.Chem import MolFromSmiles
 
@@ -45,6 +46,8 @@ def atom_attr(mol, explicit_H=True, use_chirality=True):
         feat.append(results)
     return np.array(feat)
 
+
+
 def bond_attr(mol, use_chirality=True):
     feat, index = [], []
     n = mol.GetNumAtoms()
@@ -83,8 +86,3 @@ def smiles_to_data(smiles: str) -> Data:
     )
 
 
-dict(zip [Chem.rdchem.HybridizationType.SP,
-                Chem.rdchem.HybridizationType.SP2,
-                Chem.rdchem.HybridizationType.SP3,
-                Chem.rdchem.HybridizationType.SP3D,
-                Chem.rdchem.HybridizationType.SP3D2],[i for i in range(6)]))
