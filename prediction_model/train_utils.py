@@ -26,16 +26,10 @@ def run_epoch(model,optimizer,device,loader, train=True):
     return total_loss / total_n
 
 def train_loop(model,optimizer,device,train_loader,test_loader,n_epochs):
-    best_val_loss = float("inf")
     for epoch in range(1, n_epochs + 1):
       train_loss = run_epoch(model,optimizer,device,train_loader,train = True)
       val_loss   = run_epoch(model,optimizer,device,test_loader, train=False)
 
       print(f"Epoch {epoch:03d} | train {train_loss:.4f} | val {val_loss:.4f}")
 
-      if val_loss < best_val_loss:
-          best_val_loss = val_loss
-          torch.save(model.state_dict(), "best_model.pt")
-          print(f"           ↳ saved (val {val_loss:.4f})")
-
-    return None
+    return model
