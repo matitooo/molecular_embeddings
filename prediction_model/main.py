@@ -1,7 +1,8 @@
 import argparse
 from sweep import run_sweep
+from train import run_train
 def train_mode():
-    pass
+    run_train()
 
 def sweep_mode():
     run_sweep()

@@ -44,31 +44,27 @@ class DrugCombinationModel(nn.Module):
         B = batch.mask.shape[0]
         max_exp = batch.z.shape[1]
 
-        # 1) Embedding per ogni slot farmaco → lista di [B, emb_dim]
         drug_embeddings = []
         for slot in batch.mol_batches:
             mask = slot['mask'].to(device)
-            emb = self.mol_encoder(slot['batch'].to(device))  # [n_present, emb_dim]
+            emb = self.mol_encoder(slot['batch'].to(device)) 
             full = torch.zeros(B, emb.shape[-1], device=device)
             full[mask] = emb
             drug_embeddings.append(full)
 
         n_drugs = len(drug_embeddings)
 
-        # 2) Pesa per concentrazione e somma sui farmaci
-        drug_stack = torch.stack(drug_embeddings, dim=1)              # [B, n_drugs, emb_dim]
-        z = batch.z.view(B, n_drugs, max_exp)                         # [B, n_drugs, max_exp]
-        weighted = drug_stack.unsqueeze(2) * z.unsqueeze(-1)          # [B, n_drugs, max_exp, emb_dim]
-        aggregated = weighted.sum(dim=1)                              # [B, max_exp, emb_dim]
+        drug_stack = torch.stack(drug_embeddings, dim=1)             
+        z = batch.z.view(B, n_drugs, max_exp)                         
+        weighted = drug_stack.unsqueeze(2) * z.unsqueeze(-1)          
+        aggregated = weighted.sum(dim=1)                             
 
-        # 3) One-hot cell line → [B, max_exp, N_CELL_LINES]
         cell_oh = torch.zeros(B, N_CELL_LINES, device=device)
         cell_oh.scatter_(1, batch.cell_line.long().view(B, 1), 1.0)
         cell_oh = cell_oh.unsqueeze(1).expand(-1, max_exp, -1)
 
-        # 4) Predizione
         pred = self.predictor(
             torch.cat([aggregated, cell_oh], dim=-1)
-        ).squeeze(-1)                                                  # [B, max_exp]
+        ).squeeze(-1)                                                  
 
-        return pred, batch.mask.squeeze(1)                            # [B, max_exp]
+        return pred, batch.mask.squeeze(1)                            

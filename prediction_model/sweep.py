@@ -22,9 +22,9 @@ def objective(trial):
     #load and preprocess data
     print('Loading Dataset and Vectorizing Molecules')
     try:
-      dataset = torch.load('data/droparray_100_vectorized.pt',weights_only= False)
+      dataset = torch.load(sweep_config['vectorized_dataset_path'],weights_only= False)
     except:
-      dataset = DropArray("data/droparray_100.pt")
+      dataset = DropArray(sweep_config['dataset_path'])
     
     collate_fn = partial(batch_instances_graph, drug_graph_dict=dataset.drug_graph_dict)
 

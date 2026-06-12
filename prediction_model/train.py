@@ -7,7 +7,7 @@ import torch
 from train_utils import train_loop
 
 
-def train_mode():
+def run_train():
   #load config
   device = 'cuda' if torch.cuda.is_available() else 'cpu'
   config_path = 'config/train.yaml'
@@ -17,9 +17,9 @@ def train_mode():
   #load and preprocess data
   print('Loading Dataset and Vectorizing Molecules')
   try:
-    dataset = torch.load('data/droparray_100_vectorized.pt',weights_only= False)
+    dataset = torch.load(config['vectorized_dataset_path'],weights_only= False)
   except:
-    dataset = DropArray("data/droparray_100.pt")
+    dataset = DropArray(config['dataset_path'])
   
   collate_fn = partial(batch_instances_graph, drug_graph_dict=dataset.drug_graph_dict)
 
@@ -59,3 +59,4 @@ def train_mode():
   train_loop(model,optimizer,device,train_loader,test_loader,config['n_epochs'])
 
   print('Training Completed')
+
