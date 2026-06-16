@@ -3,5 +3,5 @@ lr: 0.001
 n_epochs: 50
 embedding_dim: 128
 hidden_dim: 256
-dataset_path: data/droparray_100.pt
-vectorized_dataset_path: data/droparray_100_vectorized.pt
+dataset_path: data/droparray_small.pt
+vectorized_dataset_path: none

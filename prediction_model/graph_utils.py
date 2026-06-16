@@ -2,6 +2,11 @@ from rdkit import Chem
 from rdkit.Chem import MolFromSmiles
 import torch
 from torch_geometric.data import Data
+import yaml
+
+
+with open('config/graph_config.yaml','r') as f:
+        graph_config = yaml.safe_load(f)
 
 
 def return_dicts():
@@ -20,15 +25,25 @@ def return_dicts():
         },
         'chirality_dict': {
             'R': 0,
-            'S': 1,
-            'OTHER': 2
+            'S': 1
         },
         'stereo_dict': {
             Chem.rdchem.BondStereo.STEREONONE: 0,
             Chem.rdchem.BondStereo.STEREOANY: 1,
             Chem.rdchem.BondStereo.STEREOZ: 2,
             Chem.rdchem.BondStereo.STEREOE: 3
-        }
+        },
+        'size_dict': {
+  'atom_symbol':16,
+  'degree':11,
+  'charge':1,
+  'radical_electrons':1,
+  'hybridization':6,
+  'aromatic':1,
+  'total_h':6,
+  'chirality':3,
+  'chirality_center':1
+}
     }
 
 
@@ -50,6 +65,7 @@ def encode_num(value, values):
 
 
 def atom_encoding(atom, dicts):
+    
     vc = {}
 
     vc['atom_symbol'] = encode(atom.GetSymbol(), dicts['symbol_dict'])
@@ -80,7 +96,7 @@ def atom_encoding(atom, dicts):
         'chirality_center'
     ]
 
-    return torch.cat([vc[k] for k in order], dim=0)
+    return torch.cat([vc[k] for k in order if graph_config[k] ], dim=0)
 
 
 def mole_encoding(mol, dicts):

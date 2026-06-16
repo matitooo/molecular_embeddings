@@ -1,0 +1,9 @@
+atom_symbol: true
+degree: true
+charge: true
+radical_electrons: true
+hybridization: true
+aromatic: true
+total_h: true
+chirality: true
+chirality_center: true

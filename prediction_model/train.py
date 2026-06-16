@@ -5,6 +5,7 @@ from utils import batch_instances_graph
 from model import MoleculeGraphEncoder,DrugCombinationModel
 import torch
 from train_utils import train_loop
+from graph_utils import return_dicts
 
 
 def run_train():
@@ -34,9 +35,16 @@ def run_train():
       collate_fn=collate_fn, shuffle=True
 )
   
+  #compute node_dim_size
+  with open('config/graph_config.yaml','r') as f:
+    graph_config = yaml.safe_load(f)
+  
+  size_dict = return_dicts()['size_dict']
+  node_dim = sum(size_dict[k] for k in graph_config.keys() if graph_config[k])
+
   #create and configure model and optimizer
   mol_encoder = MoleculeGraphEncoder(
-    node_dim=47,
+    node_dim=node_dim,
     hidden_dim=config['hidden_dim'],
     embedding_dim=config['embedding_dim'],
     num_layers=4
