@@ -1,4 +1,4 @@
-# Bacteria grotwh inhibition prediction using GNN-based molecules embeddings
+# Bacteria growth inhibition prediction using GNN-based molecules embeddings
 
 ## Individual Research Module Project, SoSe26, Potsdam Universität
 
