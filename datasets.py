@@ -4,7 +4,8 @@ from graph_utils import smiles_to_data,return_dicts
 from tqdm import tqdm 
 import numpy as np
 from utils import *
-
+from trimnet_utils import Inference_trimnet
+from infomax_utils import Inference_3d_infomax
    
 class TreatmentDataset():
     def __init__(self):
@@ -23,7 +24,7 @@ class TreatmentDataset():
 
             
 class DropArray(TreatmentDataset):
-    def __init__(self,dataset_path):
+    def __init__(self,dataset_path,model='graph'):
         self.dataset = torch.load(dataset_path,weights_only = False)
         self.C = None
         self.num_c_embeddings = len(self.dataset["cell_map"])
@@ -32,10 +33,24 @@ class DropArray(TreatmentDataset):
         self.other_features = False
         self.dicts = return_dicts()
         self.smiles_dict = dict(zip(self.dataset['smiles']['drug_id'],self.dataset['smiles']['SMILES']))
-        self.drug_graph_dict = {
-              idx: smiles_to_data(smi, self.dicts)
-              for idx, smi in tqdm(self.smiles_dict.items())
-          }
+        if model == 'graph':
+            self.drug_graph_dict = {
+                idx: smiles_to_data(smi, self.dicts)
+                for idx, smi in tqdm(self.smiles_dict.items())
+            }
+        elif model =='3d_infomax':
+            inf_model = Inference_3d_infomax()
+            embedded_molecules = inf_model.pipe(self.smiles_dict.values())
+            self.drug_embedding_dict = {
+                list(self.smiles_dict.keys())[i]: embedded_molecules[i] for i in range(len(embedded_molecules)) 
+            }
+        elif model =='trimnet':
+            inf_model = Inference_trimnet()
+            embedded_molecules = inf_model.pipe(self.smiles_dict.values())
+            self.drug_embedding_dict = {
+                 list(self.smiles_dict.keys())[i]: embedded_molecules[i] for i in range(len(embedded_molecules)) 
+            }
+
         
 def split_over_drugs(instances, fold, n_folds=10, seed=3558, min_test_idx = 0):
     all_drugs = set()

@@ -1,16 +1,21 @@
+import argparse
 import torch 
-import numpy as np 
+import torch.nn.functional as F
+import os
+import yaml
 import dgl 
 import random
-from math import sqrt
-import dgl
+import numpy as np 
+import os
+import pandas as pd
 from tqdm import tqdm 
 from rdkit import Chem
+from models.infomax import PNA
 from ogb.utils.features import atom_to_feature_vector, bond_to_feature_vector
-import torch
-from torch.utils.data import Dataset
-
-
+from torch.utils.data import Dataset,DataLoader
+from torch_geometric.data import Batch
+from types import SimpleNamespace
+from math import sqrt
 
 EPS = 1e-5
 SUPPORTED_ACTIVATION_MAP = {'ReLU', 'Sigmoid', 'Tanh', 'ELU', 'SELU', 'GLU', 'LeakyReLU', 'Softplus', 'SiLU', 'None'}
@@ -100,10 +105,7 @@ def get_activation(activation):
 
 class InferenceDataset(Dataset):
 
-    def __init__(self, smiles_txt_path, device='cuda:0', transform=None, **kwargs):
-        with open(smiles_txt_path) as file:
-            lines = file.readlines()
-            smiles_list = [line.rstrip() for line in lines]
+    def __init__(self, smiles_list, device=torch.device('cuda:0'), transform=None, **kwargs):
         atom_slices = [0]
         edge_slices = [0]
         all_atom_features = []
@@ -168,3 +170,36 @@ class InferenceDataset(Dataset):
         g.ndata['feat'] = self.all_atom_features[start: start + n_atoms]
         g.edata['feat'] = self.all_edge_features[e_start: e_end]
         return g
+
+class Inference_3d_infomax:
+    def __init__(self):
+        with open("config/3d_config.yaml", "r") as f:
+            config = yaml.safe_load(f)
+        self.args = args = SimpleNamespace(**config)
+
+    def pipe(self,smiles):
+        seed_all(self.args.seed)
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() and self.args.device == 'cuda' else "cpu")
+        self.test_data = InferenceDataset(device=self.device, smiles_list=smiles)
+        print('num_smiles: ', len(self.test_data))
+        model, _,_ = self.load_model()
+        print('trainable params in model: ', sum(p.numel() for p in model.parameters() if p.requires_grad), '\n')
+        checkpoint = torch.load(self.args.checkpoint, map_location=self.device,weights_only = False)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        model.eval()
+        test_loader = DataLoader(self.test_data, batch_size=256, collate_fn=graph_only_collate)
+        embed_list = []
+        with torch.no_grad():
+            for batch in tqdm(test_loader):
+                out = model(batch).squeeze()
+                embed_list += out.unbind(0)
+        return embed_list
+
+    def load_model(self):
+        model = PNA(avg_d=self.test_data.avg_degree if hasattr(self.test_data, 'avg_degree') else 1, device=self.device,
+                                        **self.args.model_parameters)
+        pretrained_gnn_dict = {}
+        model_state_dict = model.state_dict()
+        model_state_dict.update(pretrained_gnn_dict) 
+        model.load_state_dict(model_state_dict)
+        return model, None, False

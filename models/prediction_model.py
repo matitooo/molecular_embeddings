@@ -68,3 +68,44 @@ class DrugCombinationModel(nn.Module):
         ).squeeze(-1)                                                  
 
         return pred, batch.mask.squeeze(1)                            
+    
+
+class DrugCombinationModelWithPrecomputedEmbedding(nn.Module):
+    def __init__(self, embedding_dim=128, hidden_dim=256, n_cell_lines=7):
+        super().__init__()
+        N_CELL_LINES = n_cell_lines 
+        self.predictor = nn.Sequential(
+            nn.Linear(embedding_dim + N_CELL_LINES, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        )
+        self.N_CELL_LINES = N_CELL_LINES
+
+    def forward(self, batch):
+        device = batch.z.device
+        B = batch.mask.shape[0]
+        max_exp = batch.z.shape[1]
+
+        drug_embeddings = []
+        for slot in batch.mol_batches:
+            mask = slot['mask'].to(device)
+            emb = slot['emb'].to(device) 
+            full = torch.zeros(B, emb.shape[-1], device=device)
+            full[mask] = emb
+            drug_embeddings.append(full)
+
+        n_drugs = len(drug_embeddings)
+        drug_stack = torch.stack(drug_embeddings, dim=1)             
+        z = batch.z.view(B, n_drugs, max_exp)                        
+        weighted = drug_stack.unsqueeze(2) * z.unsqueeze(-1)         
+        aggregated = weighted.sum(dim=1)                             
+
+        cell_oh = torch.zeros(B, self.N_CELL_LINES, device=device)
+        cell_oh.scatter_(1, batch.cell_line.long().view(B, 1), 1.0)
+        cell_oh = cell_oh.unsqueeze(1).expand(-1, max_exp, -1)
+
+        pred = self.predictor(
+            torch.cat([aggregated, cell_oh], dim=-1)
+        ).squeeze(-1)
+
+        return pred, batch.mask.squeeze(1) 

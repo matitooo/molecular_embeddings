@@ -1,4 +1,4 @@
-name: smiles_embedding
+name: droparray-prediction
 channels:
   - pytorch
   - nvidia

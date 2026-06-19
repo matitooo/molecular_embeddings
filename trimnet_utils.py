@@ -1,11 +1,18 @@
+import argparse
 import torch
+import torch.nn.functional as F
+import os
+import yaml
+import dgl
 import numpy as np
-
-from torch_geometric.data import Data
+import pandas as pd
+from tqdm import tqdm
+from models.trimnet import TrimNet
+from torch_geometric.data import Data,Batch
+from torch.utils.data import DataLoader
 from rdkit import Chem
 from rdkit.Chem import MolFromSmiles
-
-
+from types import SimpleNamespace
 
 def onehot_encoding(x, allowable_set):
     if x not in allowable_set:
@@ -85,4 +92,44 @@ def smiles_to_data(smiles: str) -> Data:
         edge_attr=torch.FloatTensor(edge_attr),
     )
 
+class Inference_trimnet:
 
+    def __init__(self):
+        self.ckpt_path = 'checkpoints/trimnet_checkpoint.ckpt'
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        self.ckpt = torch.load(self.ckpt_path, weights_only=False)
+        self.opt  = self.ckpt['option']
+    def load_model(self):
+        self.model = TrimNet(
+            in_dim      = self.opt['in_dim'],
+            edge_in_dim = self.opt['edge_in_dim'],
+            hidden_dim  = self.opt['hid'],
+            depth       = self.opt['depth'],
+            heads       = self.opt['heads'],
+            dropout     = self.opt['dropout'],
+            outdim      = self.opt['out_dim'],
+        )
+        self.model.load_state_dict(self.ckpt['model_state_dict'])
+        self.model.eval().to(self.device)
+        return None
+    
+    def embed_smiles(self,smiles_list):
+        all_embeddings = []
+        self.model.eval() 
+        for smi in tqdm(smiles_list):
+            emb = self.predict(smi) 
+            all_embeddings.append(emb)
+        return all_embeddings
+
+
+    def predict(self, smi):
+        graph = smiles_to_data(smi)
+        batch = Batch.from_data_list([graph]).to(self.device)
+        with torch.no_grad():
+            embedding = self.model.embed(batch).squeeze()
+        return embedding.detach().cpu()
+    
+    def pipe(self,smiles_list):
+        self.load_model()
+        embedded_smiles =self.embed_smiles(smiles_list)
+        return embedded_smiles

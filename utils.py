@@ -51,7 +51,7 @@ def generate_dataloader():
     dataset = torch.load(dataset_path,weights_only=False)
     print('Loading train data')
     train = torch.load(train_path,weights_only=False)
-    print('Loading test data')
+    print('Loading test data')      
     test = torch.load(test_path,weights_only=False)
 
     smiles_dict = dict(zip(dataset['smiles']['drug_id'],dataset['smiles']['SMILES']))
@@ -112,6 +112,58 @@ def batch_instances_graph(instances, drug_graph_dict):
         mol_batches.append({
             'batch': Batch.from_data_list(graphs),
             'mask':  torch.tensor(mask_list)
+        })
+
+    batch = Batch.from_data_list(instances_)
+    batch.mol_batches = mol_batches
+    return batch
+
+def batch_instances_embedding(instances, drug_embedding_dict):
+    """
+    same logig of batch_instance_graph but for tensor-based embedding
+    """
+    max_l = max(inst.z.shape[1] for inst in instances)
+    instances_ = []
+    for inst in instances:
+        inst_ = inst.clone()
+        length = inst.z.shape[1]
+        delta_length = max_l - length
+        mask = torch.ones([1, max_l])
+        mask[:, length:] = 0
+        inst_.mask = mask.bool()
+        inst_.z = torch.cat([inst.z, inst.z.new_zeros([inst.z.shape[0], delta_length])], 1)
+        inst_.y = torch.cat([inst.y, inst.y.new_zeros([delta_length, 1])], 0)
+        try:
+            del inst_.z_single
+            del inst_.y_single
+        except Exception:
+            pass
+        instances_.append(inst_)
+
+    max_drugs = max(inst.x.shape[0] for inst in instances)
+    mol_batches = []
+    for pos in range(max_drugs):
+        embeddings, mask_list = [], []
+        for inst in instances:
+            drug_indices = inst.x.squeeze(-1).long().tolist()
+            if isinstance(drug_indices, int):
+                drug_indices = [drug_indices]
+            if pos < len(drug_indices):
+                embeddings.append(drug_embedding_dict[drug_indices[pos]])
+                mask_list.append(True)
+            else:
+                mask_list.append(False)
+
+        if len(embeddings) > 0:
+            emb_tensor = torch.stack(embeddings, dim=0)
+        else:
+            # nessuna istanza ha un farmaco in questa posizione: tensore vuoto
+            emb_dim = next(iter(drug_embedding_dict.values())).shape[-1]
+            emb_tensor = torch.zeros(0, emb_dim)
+
+        mol_batches.append({
+            'emb': emb_tensor,        # (n_istanze_con_farmaco_in_pos, embedding_dim)
+            'mask': torch.tensor(mask_list),
         })
 
     batch = Batch.from_data_list(instances_)
