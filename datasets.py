@@ -5,7 +5,7 @@ from tqdm import tqdm
 import numpy as np
 from utils import *
 from trimnet_utils import Inference_trimnet
-from infomax_utils import Inference_3d_infomax
+from models.infomax import Inference_3d_infomax
    
 class TreatmentDataset():
     def __init__(self):

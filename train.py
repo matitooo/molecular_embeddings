@@ -25,7 +25,7 @@ def run_train(model_type):
   if model_type =='trimnet' or model_type=='3d_infomax':
     collate_fn = partial(batch_instances_embedding, drug_embedding_dict=dataset.drug_embedding_dict)
   elif model_type=='graph':
-    collate_fn = partial(batch_instances_embedding, drug_graph_dict=dataset.drug_graph_dict)
+    collate_fn = partial(batch_instances_graph, drug_graph_dict=dataset.drug_graph_dict)
   
   train, test = dataset.get_split(how="new_drugs", fold=0)
 
