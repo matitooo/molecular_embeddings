@@ -1,6 +1,8 @@
-# Bacteria grotwh inhibition prediction using GNN-based molecules embeddings
+# Bacteria growth inhibition prediction using GNN-based molecules embeddings 
 
 ## Individual Research Module Project, SoSe26, Potsdam Universität
+
+### ⚠️ This is an ongoing project, all code and models are partial and not fully working
 
 Using [Trimnet ](https://github.com/yvquanli/TrimNet) and [3DInfomax](https://github.com/hannesstark/3dinfomax), alongside with a graph-based embedding layer, different GNN-based molecule representation layers are evaluated to assess whether Morgan Fingerprints can be replaced in drug prediction tasks.
 
