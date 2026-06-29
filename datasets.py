@@ -4,7 +4,7 @@ from graph_utils import smiles_to_data,return_dicts
 from tqdm import tqdm 
 import numpy as np
 from utils import *
-from trimnet_utils import Inference_trimnet
+from models.trimnet import Inference_trimnet
 from models.infomax import Inference_3d_infomax
    
 class TreatmentDataset():
