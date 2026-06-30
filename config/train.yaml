@@ -3,5 +3,5 @@ lr: 0.001
 n_epochs: 50
 embedding_dim: 128
 hidden_dim: 256
-dataset_path: data/torch_small_reduced.pt
+dataset_path: data/droparray_small.pt
 vectorized_dataset_path: none
