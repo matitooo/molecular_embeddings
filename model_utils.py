@@ -28,7 +28,7 @@ def run_epoch(model,optimizer,device,loader, train=True):
 def train_loop(model,optimizer,device,train_loader,test_loader,n_epochs):
     for epoch in range(1, n_epochs + 1):
       train_loss = run_epoch(model,optimizer,device,train_loader,train = True)
-      val_loss   = run_epoch(model,optimizer,device,test_loader, train=False)
+      val_loss   = run_epoch(model,optimizer,device,test_loader, train= False)
 
       print(f"Epoch {epoch:03d} | train {train_loss:.4f} | val {val_loss:.4f}")
 

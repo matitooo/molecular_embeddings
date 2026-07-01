@@ -66,18 +66,10 @@ def run_train(model_type):
       embedding_dim=256
 
     model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=embedding_dim,hidden_dim=config['hidden_dim'])
-
- 
-
-  print(f'Models created with the following parameters')
-  print(model.parameters())
-
   optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
-
-
+  print(f"Now training model of type: {model_type.capitalize()}")
   #execute train
   print('Training Model')
   train_loop(model,optimizer,device,train_loader,test_loader,config['n_epochs'])
-
   print('Training Completed')
 
