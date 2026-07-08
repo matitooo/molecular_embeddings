@@ -3,11 +3,11 @@ from sweep import run_sweep
 from train import run_train
 
 
-def train_mode(model_type):
-    run_train(model_type)
+def train_mode(model_type,k_fold=False):
+    run_train(model_type,k_fold)
 
-def sweep_mode(model_type):
-    run_sweep(model_type)
+def sweep_mode(model_type,k_fold=False):
+    run_sweep(model_type,k_fold)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Choose mode")
@@ -22,8 +22,10 @@ if __name__ == "__main__":
     required=True,
     help="Choose model type"
 )
+    parser.add_argument("--kfold",action='store_true',help="Perform K-fold validation")
     args = parser.parse_args()
+    k_fold = True if args.kfold else False
     if args.train:
-        train_mode(args.model)
+        train_mode(args.model,k_fold)
     elif args.sweep:
-        sweep_mode(args.model)
+        sweep_mode(args.model,k_fold)

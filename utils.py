@@ -5,39 +5,6 @@ from torch_geometric.data import Batch
 from graph_utils import *
 
 
-def collate_fn(data_list):
-    """
-    Collate Fn function for data loader, takes the list of data objects as input and returns the dictionary to build the loader with
-    """
-    B = len(data_list)
-    n_drugs_list = [d.n_drugs for d in data_list]
-    max_drugs    = max(n_drugs_list)
-    max_exp      = max(d.z.shape[1] for d in data_list)
-    z_pad  = torch.zeros(B, max_drugs, max_exp)
-    z_mask = torch.zeros(B, max_exp, dtype=torch.bool)
-    y_pad  = torch.zeros(B, max_exp)
-
-    for i, d in enumerate(data_list):
-        nd = d.n_drugs
-        ne = d.z.shape[1]
-        z_pad[i, :nd, :ne]  = d.z
-        z_mask[i, :ne]      = True
-        y_pad[i, :ne]       = d.y.squeeze(-1)
-
-    mol_batches = []
-    for pos in range(max_drugs):
-        graphs = [d.mol_graphs[pos] for d in data_list if d.n_drugs > pos]
-        mask   = torch.tensor([d.n_drugs > pos for d in data_list])
-        mol_batches.append({'batch': Batch.from_data_list(graphs), 'mask': mask})
-
-    return {
-        'y':           y_pad,            
-        'z':           z_pad,            
-        'z_mask':      z_mask,           
-        'cell_line':   torch.stack([d.cell_line for d in data_list]),
-        'n_drugs':     torch.tensor(n_drugs_list),
-        'mol_batches': mol_batches
-    }
 
 
 def masked_mse(pred, target, mask):
@@ -50,98 +17,184 @@ def masked_mse(pred, target, mask):
 
 def batch_instances_graph(instances, drug_graph_dict):
     """
-    Creates batched instances when a graph model is selected
+    Creates batched instances when a graph model is selected.
+    Produces:
+        batch.z          -> (B, max_drugs, max_exp)
+        batch.mask       -> (B, max_exp)
+        batch.drug_mask  -> (B, max_drugs)
+        batch.mol_batches
     """
-    max_l = max(inst.z.shape[1] for inst in instances)
-    
+
+    B = len(instances)
+
+    max_exp = max(inst.z.shape[1] for inst in instances)
+    max_drugs = max(inst.z.shape[0] for inst in instances)
+
     instances_ = []
+
+    z_tensor = []
+    drug_mask = []
+
     for inst in instances:
         inst_ = inst.clone()
-        length = inst.z.shape[1]
-        delta_length = max_l - length
-        
-        mask = torch.ones([1, max_l])
-        mask[:, length:] = 0
-        inst_.mask = mask.bool()
-        inst_.z = torch.cat([inst.z, inst.z.new_zeros([inst.z.shape[0], delta_length])], 1)
-        inst_.y = torch.cat([inst.y, inst.y.new_zeros([delta_length, 1])], 0)
-        
+
+        n_drugs = inst.z.shape[0]
+        L = inst.z.shape[1]
+
+        # -------------------------
+        # prediction mask
+        # -------------------------
+        mask = torch.zeros(max_exp, dtype=torch.bool)
+        mask[:L] = True
+        inst_.mask = mask.unsqueeze(0)
+
+        # -------------------------
+        # pad y
+        # -------------------------
+        if L < max_exp:
+            inst_.y = torch.cat([
+                inst.y,
+                inst.y.new_zeros(max_exp - L, 1)
+            ], dim=0)
+
+        # -------------------------
+        # build padded z separately
+        # -------------------------
+        z_pad = inst.z.new_zeros(max_drugs, max_exp)
+        z_pad[:n_drugs, :L] = inst.z
+        z_tensor.append(z_pad)
+
+        # -------------------------
+        # drug mask
+        # -------------------------
+        dmask = torch.zeros(max_drugs, dtype=torch.bool)
+        dmask[:n_drugs] = True
+        drug_mask.append(dmask)
+
+        # remove fields we rebuild
+        try:
+            del inst_.z
+        except AttributeError:
+            pass
+
         try:
             del inst_.z_single
             del inst_.y_single
-        except:
+        except AttributeError:
             pass
+
         instances_.append(inst_)
 
-    max_drugs = max(inst.x.shape[0] for inst in instances)
+    # -------------------------
+    # molecule batches
+    # -------------------------
     mol_batches = []
+
     for pos in range(max_drugs):
-        graphs, mask_list = [], []
+        graphs = []
+        mask_list = []
+
         for inst in instances:
             drug_indices = inst.x.squeeze(-1).long().tolist()
+
             if isinstance(drug_indices, int):
                 drug_indices = [drug_indices]
+
             if pos < len(drug_indices):
                 graphs.append(drug_graph_dict[drug_indices[pos]])
                 mask_list.append(True)
             else:
                 mask_list.append(False)
+
         mol_batches.append({
-            'batch': Batch.from_data_list(graphs),
-            'mask':  torch.tensor(mask_list)
+            "batch": Batch.from_data_list(graphs),
+            "mask": torch.tensor(mask_list, dtype=torch.bool)
         })
 
     batch = Batch.from_data_list(instances_)
+
+    # overwrite with our tensors
+    batch.z = torch.stack(z_tensor, dim=0)          # (B,max_drugs,max_exp)
+    batch.drug_mask = torch.stack(drug_mask, dim=0) # (B,max_drugs)
     batch.mol_batches = mol_batches
+
     return batch
 
 def batch_instances_embedding(instances, drug_embedding_dict):
     """
-    Same logic of batch_instance_graph but for tensor-based embedding
+    Batched version for precomputed drug embeddings.
+    Produces:
+        batch.z -> (B, max_drugs, max_exp)
+        batch.mask -> (B, max_exp)
+        batch.mol_batches -> list of dicts with:
+            emb: (B, emb_dim) per slot
+            mask: (B,)
     """
+
+    B = len(instances)
+
     max_l = max(inst.z.shape[1] for inst in instances)
+    max_drugs = max(inst.x.shape[0] for inst in instances)
+
     instances_ = []
+    z_tensor = []
+
     for inst in instances:
         inst_ = inst.clone()
-        length = inst.z.shape[1]
-        delta_length = max_l - length
-        mask = torch.ones([1, max_l])
-        mask[:, length:] = 0
-        inst_.mask = mask.bool()
-        inst_.z = torch.cat([inst.z, inst.z.new_zeros([inst.z.shape[0], delta_length])], 1)
-        inst_.y = torch.cat([inst.y, inst.y.new_zeros([delta_length, 1])], 0)
+
+        n_drugs = inst.z.shape[0]
+        L = inst.z.shape[1]
+
+        mask = torch.zeros(max_l, dtype=torch.bool)
+        mask[:L] = True
+        inst_.mask = mask.unsqueeze(0)
+
+        if L < max_l:
+            inst_.y = torch.cat(
+                [inst.y, inst.y.new_zeros(max_l - L, 1)],
+                dim=0
+            )
+
+        z_pad = inst.z.new_zeros(max_drugs, max_l)
+        z_pad[:n_drugs, :L] = inst.z
+        z_tensor.append(z_pad)
+
         try:
+            del inst_.z
             del inst_.z_single
             del inst_.y_single
         except Exception:
             pass
+
         instances_.append(inst_)
 
-    max_drugs = max(inst.x.shape[0] for inst in instances)
     mol_batches = []
+
     for pos in range(max_drugs):
-        embeddings, mask_list = [], []
+        emb_list = []
+        mask_list = []
+
         for inst in instances:
             drug_indices = inst.x.squeeze(-1).long().tolist()
+
             if isinstance(drug_indices, int):
                 drug_indices = [drug_indices]
+
             if pos < len(drug_indices):
-                embeddings.append(drug_embedding_dict[drug_indices[pos]])
+                emb_list.append(drug_embedding_dict[drug_indices[pos]])
                 mask_list.append(True)
             else:
+                emb_dim = next(iter(drug_embedding_dict.values())).shape[-1]
+                emb_list.append(torch.zeros(emb_dim))
                 mask_list.append(False)
 
-        if len(embeddings) > 0:
-            emb_tensor = torch.stack(embeddings, dim=0)
-        else:
-            emb_dim = next(iter(drug_embedding_dict.values())).shape[-1]
-            emb_tensor = torch.zeros(0, emb_dim)
-
         mol_batches.append({
-            'emb': emb_tensor,
-            'mask': torch.tensor(mask_list),
+            "emb": torch.stack(emb_list, dim=0),
+            "mask": torch.tensor(mask_list, dtype=torch.bool),
         })
 
     batch = Batch.from_data_list(instances_)
+    batch.z = torch.stack(z_tensor, dim=0)
     batch.mol_batches = mol_batches
+
     return batch
