@@ -79,39 +79,71 @@ class DrugCombinationModel(nn.Module):
         )
 
     def forward(self, batch):
+
         device = batch.z.device
+
         B, D, T = batch.z.shape
 
-        drug_embeddings = []
+        # Encode all unique molecular graphs exactly once.
+        mol_batch = batch.mol_batch.to(device)
+        mol_embeddings = self.mol_encoder(mol_batch)
 
-        for slot in batch.mol_batches:
-            mask = slot["mask"].to(device)
-            emb = self.mol_encoder(slot["batch"].to(device))
+        # Map each drug position to its molecular embedding.
+        #
+        # batch.drug_index: (B, D)
+        # mol_embeddings:  (N_unique_drugs, E)
+        # drug_stack:      (B, D, E)
+        drug_stack = mol_embeddings[
+            batch.drug_index.to(device)
+        ]
 
-            full = torch.zeros(B, emb.size(-1), device=device)
-            full[mask] = emb
-            drug_embeddings.append(full)
+        # Weighted combination of drug embeddings.
+        #
+        # drug_stack: (B, D, E)
+        # z:          (B, D, T)
+        # result:     (B, T, E)
+        aggregated = torch.einsum(
+            "bde,bdt->bte",
+            drug_stack,
+            batch.z,
+        )
 
-        drug_stack = torch.stack(drug_embeddings, dim=1)  # (B, D, E)
+        # Cell-line encoding.
+        cell_oh = torch.zeros(
+            B,
+            self.N_CELL_LINES,
+            device=device,
+            dtype=aggregated.dtype,
+        )
 
-        z = batch.z  # (B, D, T)
+        cell_oh.scatter_(
+            1,
+            batch.cell_line.long().view(B, 1),
+            1.0,
+        )
 
-        weighted = drug_stack.unsqueeze(2) * z.unsqueeze(-1)  # (B, D, T, E)
-        aggregated = weighted.sum(dim=1)  # (B, T, E)
+        cell_oh = cell_oh.unsqueeze(1).expand(
+            B,
+            T,
+            self.N_CELL_LINES,
+        )
 
-        cell_oh = torch.zeros(B, self.N_CELL_LINES, device=device)
-        cell_oh.scatter_(1, batch.cell_line.long().view(B, 1), 1.0)
+        # Prediction network.
+        x = torch.cat(
+            [
+                aggregated,
+                cell_oh,
+            ],
+            dim=-1,
+        )
 
-        cell_oh = cell_oh.unsqueeze(1).expand(B, T, self.N_CELL_LINES)
+        x = x.reshape(B * T, -1)
 
-        x = torch.cat([aggregated, cell_oh], dim=-1)  # (B, T, E+C)
+        x = self.rnet(x)
 
-        x = x.view(B * T, -1)
+        pred = self.predictor(x).squeeze(-1)
 
-        out = self.rnet(x)
-        pred = self.predictor(out).squeeze(-1)
-
-        pred = pred.view(B, T)
+        pred = pred.reshape(B, T)
 
         return pred, batch.mask.squeeze(1)
 
