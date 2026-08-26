@@ -54,7 +54,7 @@ def run_train(model_type, k_fold=False):
         scores = {}
         os.makedirs('trained_model_weights', exist_ok=True)
 
-        for fold in range(10):
+        for fold in range(1,10):
 
             train, test = dataset.get_split(
                 how="new_drugs",
@@ -173,9 +173,7 @@ def run_train(model_type, k_fold=False):
 
         print('\nTraining without k-fold')
 
-        # --------------------------------------------------------
-        # Train/test split
-        # --------------------------------------------------------
+        
         train, test = dataset.get_split(
             how="new_drugs"
         )
@@ -196,9 +194,7 @@ def run_train(model_type, k_fold=False):
             shuffle=False
         )
 
-        # --------------------------------------------------------
-        # Create model
-        # --------------------------------------------------------
+
         if model_type == 'graph':
 
             with open('config/graph_config.yaml', 'r') as f:
@@ -238,17 +234,13 @@ def run_train(model_type, k_fold=False):
                 hidden_dim=config['hidden_dim']
             ).to(device)
 
-        # --------------------------------------------------------
-        # Optimizer
-        # --------------------------------------------------------
+    
         optimizer = torch.optim.Adam(
             model.parameters(),
             lr=config['lr']
         )
 
-        # --------------------------------------------------------
-        # Train
-        # --------------------------------------------------------
+
         print('Training Model')
 
         trained_model, val_loss = train_loop(
@@ -260,9 +252,6 @@ def run_train(model_type, k_fold=False):
             config['n_epochs']
         )
 
-        # --------------------------------------------------------
-        # Save model
-        # --------------------------------------------------------
         os.makedirs('trained_model_weights', exist_ok=True)
 
         w_path = f'trained_model_weights/{model_type}.pt'
@@ -272,9 +261,6 @@ def run_train(model_type, k_fold=False):
             w_path
         )
 
-        # --------------------------------------------------------
-        # Save validation loss
-        # --------------------------------------------------------
         with open(
             f'trained_model_weights/{model_type}_score.txt',
             'w'

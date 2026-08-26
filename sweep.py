@@ -112,7 +112,7 @@ def objective_3d_infomax(trial):
   )
     model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=256,hidden_dim=hidden_dim)
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
-    trained_model = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
+    trained_model,val_loss = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
     score = eval(trained_model,test_loader)
     return score
 
