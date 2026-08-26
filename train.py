@@ -63,18 +63,21 @@ def run_train(model_type, k_fold=False):
 
             train_loader = torch.utils.data.DataLoader(
                 train,
-                batch_size=128,
-                num_workers=0,
+                batch_size=config['batch_size'],
+                shuffle=True,
+                num_workers=4,
+                pin_memory=torch.cuda.is_available(),
+                persistent_workers=True,
                 collate_fn=collate_fn,
-                shuffle=True
             )
 
             test_loader = torch.utils.data.DataLoader(
                 test,
-                batch_size=128,
-                num_workers=0,
+                batch_size=config['batch_size'],
+                num_workers=4,
+                pin_memory=torch.cuda.is_available(),
+                persistent_workers=True,
                 collate_fn=collate_fn,
-                shuffle=False
             )
 
             # ----------------------------------------------------
@@ -179,20 +182,23 @@ def run_train(model_type, k_fold=False):
         )
 
         train_loader = torch.utils.data.DataLoader(
-            train,
-            batch_size=128,
-            num_workers=0,
-            collate_fn=collate_fn,
-            shuffle=True
-        )
+                train,
+                batch_size=config['batch_size'],
+                shuffle=True,
+                num_workers=4,
+                pin_memory=torch.cuda.is_available(),
+                persistent_workers=True,
+                collate_fn=collate_fn,
+            )
 
         test_loader = torch.utils.data.DataLoader(
-            test,
-            batch_size=128,
-            num_workers=0,
-            collate_fn=collate_fn,
-            shuffle=False
-        )
+                test,
+                batch_size=config['batch_size'],
+                num_workers=4,
+                pin_memory=torch.cuda.is_available(),
+                persistent_workers=True,
+                collate_fn=collate_fn,
+            )
 
 
         if model_type == 'graph':

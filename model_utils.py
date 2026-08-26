@@ -7,7 +7,10 @@ def run_epoch(model,optimizer,device,loader, train=True):
 
     with torch.set_grad_enabled(train):
         for batch in loader:
-            batch = batch.to(device)
+            batch = batch.to(
+    device,
+    non_blocking=True,
+)
 
             pred, mask = model(batch)           
             target = batch.y.view(pred.shape)   
@@ -15,7 +18,7 @@ def run_epoch(model,optimizer,device,loader, train=True):
             loss = masked_mse(pred, target, mask)
 
             if train:
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
                 loss.backward()
                 optimizer.step()
 
@@ -54,7 +57,10 @@ def eval(model,test_loader):
   model.eval()
   total_loss, total_n = 0.0, 0
   for batch in test_loader:
-            batch = batch.to(device)
+            batch = batch.to(
+    device,
+    non_blocking=True,
+)
             pred, mask = model(batch)           
             target = batch.y.view(pred.shape)   
             loss = masked_mse(pred, target, mask)
