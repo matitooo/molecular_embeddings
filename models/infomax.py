@@ -571,7 +571,7 @@ class Inference_3d_infomax:
 
     def pipe(self,smiles):
         seed_all(self.args.seed)
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() and self.args.device == 'cuda' else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.test_data = InferenceDataset(device=self.device, smiles_list=smiles)
         print('num_smiles: ', len(self.test_data))
         model, _,_ = self.load_model()
