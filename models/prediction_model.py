@@ -138,11 +138,7 @@ class DrugCombinationModelWithPrecomputedEmbedding(nn.Module):
 
         for slot in batch.mol_batches:
             emb = slot["emb"].to(device)   # (B, E)
-            mask = slot["mask"].to(device)  # (B,)
-
-            full = torch.zeros(B, emb.size(-1), device=device)
-            full[mask] = emb
-            drug_embeddings.append(full)
+            drug_embeddings.append(emb)
 
         drug_stack = torch.stack(drug_embeddings, dim=1)  # (B, D, E)
 
