@@ -54,7 +54,7 @@ def objective_graph(trial):
         hidden_dim=hidden_dim
     ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
-    trained_model = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
+    trained_model,val_loss = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
     score = eval(trained_model,test_loader)
     return score
 
@@ -83,7 +83,7 @@ def objective_trimnet(trial):
   )
     model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=64,hidden_dim=hidden_dim)
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
-    trained_model = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
+    trained_model,val_loss = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
     score = eval(trained_model,test_loader)
     return score
 
@@ -117,13 +117,13 @@ def objective_3d_infomax(trial):
     return score
 
 def run_sweep(model_type):
+  n_trials = sweep_config['n_trials']
   study = optuna.create_study(direction="minimize")
   if model_type=='graph':
-    study.optimize(objective_graph, n_trials=5)
+    study.optimize(objective_graph, n_trials=n_trials)
   elif model_type=='trimnet':
-    study.optimize(objective_trimnet, n_trials=5)
+    study.optimize(objective_trimnet, n_trials=n_trials)
   elif model_type=='3d_infomax':
-    study.optimize(objective_3d_infomax, n_trials=5)
-
+    study.optimize(objective_3d_infomax, n_trials=n_trials)
   print("Best parameters:", study.best_params)
   print("Best score:", study.best_value)

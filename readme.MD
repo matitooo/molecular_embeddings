@@ -1,4 +1,4 @@
-# Bacteria growth inhibition prediction using GNN-based molecules embeddings 
+# Bacteria growth inhibition prediction using GNN-based molecules embeddings
 
 ## Individual Research Module Project, SoSe26, Potsdam Universität
 
@@ -12,8 +12,8 @@ Training and evaluation were performed over the [DropArray](https://www.pnas.org
 
 ### 1. Environment setup
 
-A stable, python 3.11-based conda environment can be set up by running the following command from inside the repo root folder
+A stable, python 3.11-based conda environment can be set up by running the following command from inside the "installing folder"
 
 ```
-conda create -f environment_config_stable.yaml
+bash install sh
 ```
