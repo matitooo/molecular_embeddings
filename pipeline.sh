@@ -1,30 +1,26 @@
 #!/usr/bin/env bash
+set -eo pipefail
 
-set -e
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
-# Install requirements
-yes | bash installing/install.sh
+# Installa (idempotente: riusa .venv se esiste)
+bash installing/install.sh
 
-# Define model types
+# Attiva il venv in QUESTA shell, così main.py usa l'ambiente giusto
+source .venv/bin/activate
+
 model_types=("graph" "3d_infomax" "trimnet")
 
 for model in "${model_types[@]}"; do
-
     echo "Sweeping model type: ${model}"
-
-    # Execute sweep
     python main.py --sweep --model "${model}"
 
-    # Locate best training parameters/config
     best_config="best_configurations/${model}_config.yaml"
 
-    # Train using best configuration
     echo "Best parameters found, training with k-fold model: ${model}"
-
     python main.py \
         --train \
         --model "${model}" \
         --kfold \
         --config "${best_config}"
-
 done
