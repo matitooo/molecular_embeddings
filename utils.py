@@ -3,7 +3,7 @@ import torch
 from tqdm import tqdm
 from torch_geometric.data import Batch
 from graph_utils import *
-
+import json
 
 
 
@@ -198,3 +198,46 @@ def batch_instances_embedding(instances, drug_embedding_dict):
     batch.mol_batches = mol_batches
 
     return batch
+
+
+def compute_base_path(model_type,config,fold = None):
+    pth = 'predictions/'
+    pth += model_type
+    pth += "/"
+    for value in config.values():
+        if type(value) == int or type(value) == float:
+            pth += "_"
+            pth += str(value)
+    if fold:
+        pth+="/fold_"+str(fold)
+    return pth
+
+
+
+def compute_base_path_sweep(model_type,params):
+    pth = 'sweep_predictions/'
+    pth += model_type
+    pth += "/"
+    for value in params:
+        if type(value) == int or type(value) == float:
+            pth += "_"
+            pth += str(value)
+    return pth
+
+
+
+def create_yaml_from_params(params_path):
+    with open(params_path, 'r') as f:
+        data = json.load(f)
+
+    config = data["best_params"]
+    config.update({
+    "dataset_path": "data/debug_dataset.pt",
+    "vectorized_dataset_path": None
+})
+
+    name = f"best_configurations/{data['model_type']}_config.yaml"
+    with open(name, "w") as f:
+        yaml.dump(config, f, sort_keys=False)
+
+create_yaml_from_params('best_configurations/graph_best_params.json')

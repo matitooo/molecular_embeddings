@@ -1,20 +1,25 @@
 import yaml
 from functools import partial
 from datasets import DropArray
-from utils import batch_instances_graph,batch_instances_embedding
+from utils import batch_instances_graph,batch_instances_embedding,compute_base_path
 from models.prediction_model import MoleculeGraphEncoder,DrugCombinationModel,DrugCombinationModelWithPrecomputedEmbedding
 import torch
 from model_utils import train_loop
 from graph_utils import return_dicts
 import os
 
-def run_train(model_type, k_fold=False):
+def run_train(model_type, k_fold=False,custom_config=None):
     # load config
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    config_path = 'config/train.yaml'
+
+    if custom_config: 
+        config_path = custom_config
+    else:
+        config_path = 'config/train.yaml'
 
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
+
 
     # load and preprocess data
     print('Loading Dataset and Vectorizing Molecules')
@@ -55,7 +60,8 @@ def run_train(model_type, k_fold=False):
         os.makedirs('trained_model_weights', exist_ok=True)
 
         for fold in range(1,10):
-
+            
+            base_path = compute_base_path(model_type,config,int(fold))
             train, test = dataset.get_split(
                 how="new_drugs",
                 fold=fold
@@ -139,7 +145,8 @@ def run_train(model_type, k_fold=False):
                 device,
                 train_loader,
                 test_loader,
-                config['n_epochs']
+                config['n_epochs'],
+                base_path=base_path
             )
 
             # ----------------------------------------------------
@@ -153,7 +160,6 @@ def run_train(model_type, k_fold=False):
             )
 
             scores[fold] = val_loss
-
             print(f'Fold {fold + 1} completed')
             print(f'Validation loss: {val_loss}')
 
@@ -163,6 +169,7 @@ def run_train(model_type, k_fold=False):
         with open('scores.txt', 'w') as f:
             print(scores, file=f)
 
+        
         print('\nK-fold training completed')
         print('Scores:', scores)
 
@@ -234,7 +241,9 @@ def run_train(model_type, k_fold=False):
                 hidden_dim=config['hidden_dim']
             ).to(device)
 
-    
+
+        base_path = compute_base_path(model_type,config)
+
         optimizer = torch.optim.Adam(
             model.parameters(),
             lr=config['lr']
@@ -243,13 +252,15 @@ def run_train(model_type, k_fold=False):
 
         print('Training Model')
 
+
         trained_model, val_loss = train_loop(
             model,
             optimizer,
             device,
             train_loader,
             test_loader,
-            config['n_epochs']
+            config['n_epochs'],
+            base_path=base_path
         )
 
         os.makedirs('trained_model_weights', exist_ok=True)

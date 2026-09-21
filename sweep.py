@@ -3,11 +3,13 @@ import yaml
 from models.prediction_model import DrugCombinationModel,MoleculeGraphEncoder,DrugCombinationModelWithPrecomputedEmbedding
 from datasets import DropArray
 from functools import partial
-from utils import batch_instances_graph,batch_instances_embedding
+from utils import batch_instances_graph,batch_instances_embedding,compute_base_path_sweep
 import torch
 from model_utils import train_loop
 from model_utils import eval
 from graph_utils import return_dicts
+import os
+import json
 
 with open('config/sweep.yaml','r') as f:
    sweep_config = yaml.safe_load(f)
@@ -54,8 +56,10 @@ def objective_graph(trial):
         hidden_dim=hidden_dim
     ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
-    trained_model,val_loss = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
-    score = eval(trained_model,test_loader)
+    run_params = [batch_size,lr,n_epochs,embedding_dim,hidden_dim]
+    base_path = compute_base_path_sweep(model_type = 'graph',params = run_params)
+    print(base_path)
+    trained_model,score = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs,base_path=base_path)
     return score
 
 def objective_trimnet(trial):
@@ -83,8 +87,7 @@ def objective_trimnet(trial):
   )
     model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=64,hidden_dim=hidden_dim)
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
-    trained_model,val_loss = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
-    score = eval(trained_model,test_loader)
+    trained_model,score = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
     return score
 
 def objective_3d_infomax(trial):
@@ -125,5 +128,21 @@ def run_sweep(model_type):
     study.optimize(objective_trimnet, n_trials=n_trials)
   elif model_type=='3d_infomax':
     study.optimize(objective_3d_infomax, n_trials=n_trials)
-  print("Best parameters:", study.best_params)
-  print("Best score:", study.best_value)
+  
+  best_params = study.best_params
+  best_score = study.best_value
+
+  os.makedirs("best_configurations", exist_ok=True)
+
+  output_path = 'best_configurations/'+ f"{model_type}_best_params.json"
+
+  result = {
+        "model_type": model_type,
+        "best_score": best_score,
+        "best_params": best_params,
+    }
+
+  with open(output_path, "w") as f:
+        json.dump(result, f, indent=4)
+
+  print(f"Saved best parameters to: {output_path}")
