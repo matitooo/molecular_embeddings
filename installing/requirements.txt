@@ -19,8 +19,12 @@ torch-geometric==2.8.0.post1
 
 optuna
 ogb==1.3.3
+rdkit
 
 synergy==1.0.0
 
 aiohttp
 fsspec
+
+
+torchdata==0.7.1
