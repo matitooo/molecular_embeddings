@@ -85,7 +85,7 @@ def objective_trimnet(trial):
         test, batch_size=batch_size, num_workers=0,
         collate_fn=collate_fn, shuffle=True
   )
-    model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=64,hidden_dim=hidden_dim)
+    model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=64,hidden_dim=hidden_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
     trained_model,score = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
     return score
@@ -113,7 +113,7 @@ def objective_3d_infomax(trial):
         test, batch_size=batch_size, num_workers=0,
         collate_fn=collate_fn, shuffle=True
   )
-    model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=256,hidden_dim=hidden_dim)
+    model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=256,hidden_dim=hidden_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
     trained_model,val_loss = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
     score = eval(trained_model,test_loader)
