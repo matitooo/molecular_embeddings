@@ -3,7 +3,7 @@ import yaml
 from models.prediction_model import DrugCombinationModel,MoleculeGraphEncoder,DrugCombinationModelWithPrecomputedEmbedding
 from datasets import DropArray
 from functools import partial
-from utils import batch_instances_graph,batch_instances_embedding,compute_base_path_sweep
+from utils import batch_instances_graph,batch_instances_embedding,compute_base_path_sweep,create_yaml_from_params,dump_study_statistics
 import torch
 from model_utils import train_loop
 from model_utils import eval
@@ -11,10 +11,11 @@ from graph_utils import return_dicts
 import os
 import json
 
-with open('config/sweep.yaml','r') as f:
-   sweep_config = yaml.safe_load(f)
 
-def objective_graph(trial):
+
+def objective_graph(trial,debug_flag=False):
+    with open('config/sweep.yaml','r') as f:
+      sweep_config = yaml.safe_load(f)['graph']
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     batch_size = trial.suggest_categorical("batch_size",sweep_config['batch_size'])
     lr = trial.suggest_categorical("lr",sweep_config['lr'])
@@ -23,13 +24,13 @@ def objective_graph(trial):
     hidden_dim = trial.suggest_categorical("hidden_dim",sweep_config['hidden_dim'])
     #load and preprocess data
     print('Loading Dataset and Vectorizing Molecules')
-    try:
-      dataset = torch.load(sweep_config['vectorized_dataset_path'],weights_only= False)
-    except:
+    if debug_flag:
+      dataset = DropArray('data/debug_dataset.pt')
+    else:
       dataset = DropArray(sweep_config['dataset_path'])
     
     collate_fn = partial(batch_instances_graph, drug_graph_dict=dataset.drug_graph_dict)
-    train, test = dataset.get_split(how="new_drugs", fold=0)
+    train, test = dataset.get_split(how="new_drugs", fold=0,n_folds=10)
     train_loader = torch.utils.data.DataLoader(
         train, batch_size=batch_size, num_workers=0,
         collate_fn=collate_fn, shuffle=True
@@ -58,11 +59,12 @@ def objective_graph(trial):
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
     run_params = [batch_size,lr,n_epochs,embedding_dim,hidden_dim]
     base_path = compute_base_path_sweep(model_type = 'graph',params = run_params)
-    print(base_path)
     trained_model,score = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs,base_path=base_path)
     return score
 
-def objective_trimnet(trial):
+def objective_trimnet(trial,debug_flag=False):
+    with open('config/sweep.yaml','r') as f:
+      sweep_config = yaml.safe_load(f)['trimnet']
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     batch_size = trial.suggest_categorical("batch_size",sweep_config['batch_size'])
     lr = trial.suggest_categorical("lr",sweep_config['lr'])
@@ -70,13 +72,13 @@ def objective_trimnet(trial):
     hidden_dim = trial.suggest_categorical("hidden_dim",sweep_config['hidden_dim'])
     #load and preprocess data
     print('Loading Dataset and Vectorizing Molecules')
-    try:
-      dataset = torch.load(sweep_config['vectorized_dataset_path'],weights_only= False)
-    except:
+    if debug_flag:
+      dataset = DropArray('data/debug_dataset.pt',model='trimnet')
+    else:
       dataset = DropArray(sweep_config['dataset_path'],model='trimnet')
     
     collate_fn = partial(batch_instances_embedding, drug_embedding_dict=dataset.drug_embedding_dict)
-    train, test = dataset.get_split(how="new_drugs", fold=0)
+    train, test = dataset.get_split(how="new_drugs", fold=0,n_folds=10)
     train_loader = torch.utils.data.DataLoader(
         train, batch_size=batch_size, num_workers=0,
         collate_fn=collate_fn, shuffle=True
@@ -87,10 +89,14 @@ def objective_trimnet(trial):
   )
     model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=64,hidden_dim=hidden_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
-    trained_model,score = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
+    run_params = [batch_size,lr,n_epochs,hidden_dim]
+    base_path = compute_base_path_sweep(model_type = 'trimnet',params = run_params)
+    trained_model,score = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs,base_path=base_path)
     return score
 
-def objective_3d_infomax(trial):
+def objective_3d_infomax(trial,debug_flag=False):
+    with open('config/sweep.yaml','r') as f:
+      sweep_config = yaml.safe_load(f)['3d_infomax']
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     batch_size = trial.suggest_categorical("batch_size",sweep_config['batch_size'])
     lr = trial.suggest_categorical("lr",sweep_config['lr'])
@@ -98,13 +104,13 @@ def objective_3d_infomax(trial):
     hidden_dim = trial.suggest_categorical("hidden_dim",sweep_config['hidden_dim'])
     #load and preprocess data
     print('Loading Dataset and Vectorizing Molecules')
-    try:
-      dataset = torch.load(sweep_config['vectorized_dataset_path'],weights_only= False)
-    except:
+    if debug_flag:
+      dataset = DropArray('data/debug_dataset.pt',model='3d_infomax')
+    else:
       dataset = DropArray(sweep_config['dataset_path'],model='3d_infomax')
     
     collate_fn = partial(batch_instances_embedding, drug_embedding_dict=dataset.drug_embedding_dict)
-    train, test = dataset.get_split(how="new_drugs", fold=0)
+    train, test = dataset.get_split(how="new_drugs", fold=0,n_folds=10)
     train_loader = torch.utils.data.DataLoader(
         train, batch_size=batch_size, num_workers=0,
         collate_fn=collate_fn, shuffle=True
@@ -115,34 +121,47 @@ def objective_3d_infomax(trial):
   )
     model = DrugCombinationModelWithPrecomputedEmbedding(embedding_dim=256,hidden_dim=hidden_dim).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr= lr)
-    trained_model,val_loss = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs)
-    score = eval(trained_model,test_loader)
+    run_params = [batch_size,lr,n_epochs,hidden_dim]
+    base_path = compute_base_path_sweep(model_type = '3d_infomax',params = run_params)
+    trained_model,score = train_loop(model,optimizer,device,train_loader,test_loader,n_epochs,base_path=base_path)
     return score
 
-def run_sweep(model_type):
-  n_trials = sweep_config['n_trials']
-  study = optuna.create_study(direction="minimize")
-  if model_type=='graph':
-    study.optimize(objective_graph, n_trials=n_trials)
-  elif model_type=='trimnet':
-    study.optimize(objective_trimnet, n_trials=n_trials)
-  elif model_type=='3d_infomax':
-    study.optimize(objective_3d_infomax, n_trials=n_trials)
-  
-  best_params = study.best_params
-  best_score = study.best_value
 
-  os.makedirs("best_configurations", exist_ok=True)
 
-  output_path = 'best_configurations/'+ f"{model_type}_best_params.json"
+def run_sweep(model_type,debug_flag=False):
+    with open("config/sweep.yaml", "r") as f:
+        sweep_config = yaml.safe_load(f)[model_type]
 
-  result = {
-        "model_type": model_type,
-        "best_score": best_score,
-        "best_params": best_params,
+    study = optuna.create_study(direction="minimize")
+    objectives = {
+        "graph": objective_graph,
+        "trimnet": objective_trimnet,
+        "3d_infomax": objective_3d_infomax,
     }
 
-  with open(output_path, "w") as f:
+    if model_type not in objectives:
+        raise ValueError(f"Unknown model_type: {model_type}")
+
+    study.optimize(
+    lambda trial: objectives[model_type](
+        trial,
+        debug_flag=debug_flag
+    ),
+    n_trials=sweep_config["n_trials"]
+)
+    output_path = f"best_configurations/{model_type}_best_params.json"
+    os.makedirs("best_configurations", exist_ok=True)
+
+    result = {
+        "model_type": model_type,
+        "best_score": study.best_value,
+        "best_params": study.best_params,
+    }
+
+    with open(output_path, "w") as f:
         json.dump(result, f, indent=4)
 
-  print(f"Saved best parameters to: {output_path}")
+    create_yaml_from_params(output_path)
+    dump_study_statistics(study, model_type, "sweep_statistics")
+
+    print(f"Saved best configuration to: {output_path}")

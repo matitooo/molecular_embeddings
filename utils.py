@@ -240,4 +240,152 @@ def create_yaml_from_params(params_path):
     with open(name, "w") as f:
         yaml.dump(config, f, sort_keys=False)
 
-create_yaml_from_params('best_configurations/graph_best_params.json')
+
+
+
+
+import os
+import json
+import yaml
+import optuna
+import numpy as np
+from datetime import datetime
+
+
+def _json_safe(value):
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def dump_study_statistics(study, model_type, output_dir="sweep_statistics"):
+    os.makedirs(output_dir, exist_ok=True)
+
+    completed_trials = [
+        t for t in study.trials
+        if t.state == optuna.trial.TrialState.COMPLETE
+        and t.value is not None
+    ]
+
+    try:
+        param_importances = optuna.importance.get_param_importances(study)
+    except Exception:
+        param_importances = {}
+
+    trials_data = []
+
+    best_so_far = None
+
+    for trial in study.trials:
+
+        if trial.value is not None:
+            if best_so_far is None:
+                best_so_far = trial.value
+            else:
+                best_so_far = min(best_so_far, trial.value)
+
+        trial_data = {
+            "number": trial.number,
+            "state": trial.state.name,
+            "score": _json_safe(trial.value),
+            "params": {
+                k: _json_safe(v)
+                for k, v in trial.params.items()
+            },
+            "distributions": {
+                name: str(distribution)
+                for name, distribution in trial.distributions.items()
+            },
+            "datetime_start": (
+                trial.datetime_start.isoformat()
+                if trial.datetime_start else None
+            ),
+            "datetime_complete": (
+                trial.datetime_complete.isoformat()
+                if trial.datetime_complete else None
+            ),
+            "duration_seconds": (
+                trial.duration.total_seconds()
+                if trial.duration else None
+            ),
+            "best_score_so_far": _json_safe(best_so_far),
+            "user_attrs": {
+                k: _json_safe(v)
+                for k, v in trial.user_attrs.items()
+            },
+            "system_attrs": {
+                k: _json_safe(v)
+                for k, v in trial.system_attrs.items()
+            }
+        }
+
+        trials_data.append(trial_data)
+
+    scores = np.array(
+        [t.value for t in completed_trials],
+        dtype=float
+    )
+
+    if len(scores) > 0:
+        score_statistics = {
+            "count": int(len(scores)),
+            "min": float(np.min(scores)),
+            "max": float(np.max(scores)),
+            "mean": float(np.mean(scores)),
+            "median": float(np.median(scores)),
+            "std": float(np.std(scores)),
+            "variance": float(np.var(scores)),
+            "q25": float(np.quantile(scores, 0.25)),
+            "q75": float(np.quantile(scores, 0.75)),
+        }
+    else:
+        score_statistics = {}
+
+    result = {
+        "model_type": model_type,
+
+        "study": {
+            "study_name": study.study_name,
+            "direction": study.direction.name,
+            "sampler": type(study.sampler).__name__,
+            "pruner": type(study.pruner).__name__,
+            "n_trials": len(study.trials),
+            "n_completed_trials": len(completed_trials),
+        },
+
+        "best_trial": {
+            "number": study.best_trial.number,
+            "score": _json_safe(study.best_value),
+            "params": {
+                k: _json_safe(v)
+                for k, v in study.best_params.items()
+            }
+        },
+
+        "score_statistics": score_statistics,
+
+        "parameter_importance": {
+            k: float(v)
+            for k, v in param_importances.items()
+        },
+
+        "trials": trials_data
+    }
+
+    output_path = os.path.join(
+        output_dir,
+        f"{model_type}_sweep_statistics.json"
+    )
+
+    with open(output_path, "w") as f:
+        json.dump(result, f, indent=4)
+
+    print(f"Saved sweep statistics to: {output_path}")
+
+    return output_path

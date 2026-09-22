@@ -7,8 +7,10 @@ import torch
 from model_utils import train_loop
 from graph_utils import return_dicts
 import os
+import numpy as np
+import json
 
-def run_train(model_type, k_fold=False,custom_config=None):
+def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
     # load config
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -23,13 +25,12 @@ def run_train(model_type, k_fold=False,custom_config=None):
 
     # load and preprocess data
     print('Loading Dataset and Vectorizing Molecules')
-
-    try:
-        dataset = torch.load(
-            config['vectorized_dataset_path'],
-            weights_only=False
+    if debug_flag:
+        dataset = DropArray(
+            'data/debug_dataset.pt',
+            model=model_type
         )
-    except:
+    else:
         dataset = DropArray(
             config['dataset_path'],
             model=model_type
@@ -57,14 +58,15 @@ def run_train(model_type, k_fold=False,custom_config=None):
     if k_fold:
 
         scores = {}
-        os.makedirs('trained_model_weights', exist_ok=True)
+        os.makedirs(f'trained_model_weights/{model_type}', exist_ok=True)
 
         for fold in range(1,10):
             
             base_path = compute_base_path(model_type,config,int(fold))
             train, test = dataset.get_split(
                 how="new_drugs",
-                fold=fold
+                fold=fold,
+                n_folds=10
             )
 
             train_loader = torch.utils.data.DataLoader(
@@ -133,7 +135,7 @@ def run_train(model_type, k_fold=False,custom_config=None):
                 lr=config['lr']
             )
 
-            print(f"\nNow training fold: {fold + 1} of 10")
+            print(f"\nNow training fold: {fold} of 9")
             print('Training Model')
 
             # ----------------------------------------------------
@@ -152,7 +154,7 @@ def run_train(model_type, k_fold=False,custom_config=None):
             # ----------------------------------------------------
             # Save model
             # ----------------------------------------------------
-            w_path = f'trained_model_weights/{fold}.pt'
+            w_path = f'trained_model_weights/{model_type}/{fold}.pt'
 
             torch.save(
                 trained_model.state_dict(),
@@ -160,18 +162,30 @@ def run_train(model_type, k_fold=False,custom_config=None):
             )
 
             scores[fold] = val_loss
-            print(f'Fold {fold + 1} completed')
+            print(f'Fold {fold} completed')
             print(f'Validation loss: {val_loss}')
 
-        # --------------------------------------------------------
-        # Save scores
-        # --------------------------------------------------------
-        with open('scores.txt', 'w') as f:
-            print(scores, file=f)
+        os.makedirs("training_statistics", exist_ok=True)
 
-        
-        print('\nK-fold training completed')
-        print('Scores:', scores)
+        scores_values = list(scores.values())
+
+        training_stats = {
+            "model_type": model_type,
+            "n_folds": len(scores),
+            "scores": scores,
+            "mean": float(np.mean(scores_values)),
+            "std": float(np.std(scores_values, ddof=1)),
+            "config": config
+        }
+
+        stats_path = f"training_statistics/{model_type}.json"
+
+        with open(stats_path, "w") as f:
+            json.dump(training_stats, f, indent=4)
+
+        print(f"\nK-fold training completed")
+        print(f"Scores: {scores}")
+        print(f"Training statistics saved to: {stats_path}")
 
     # ============================================================
     # TRAINING WITHOUT K-FOLD

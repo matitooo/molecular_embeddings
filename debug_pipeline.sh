@@ -13,7 +13,7 @@ model_types=("graph" "3d_infomax" "trimnet")
 
 for model in "${model_types[@]}"; do
     echo "Sweeping model type: ${model}"
-    python main.py --sweep --model "${model}"
+    python main.py --sweep --debug  --model "${model}"
 
     best_config="best_configurations/${model}_config.yaml"
 
@@ -21,6 +21,7 @@ for model in "${model_types[@]}"; do
     python main.py \
         --train \
         --model "${model}" \
+        --debug \
         --kfold \
         --config "${best_config}"
 done
