@@ -1,27 +1,66 @@
 graph:
-  batch_size: [32, 64, 128]
-  lr: [0.005, 0.001, 0.0005]
-  n_epochs: [5, 10]
-  embedding_dim: [64, 128, 256]
-  hidden_dim: [128, 256, 512]
+  batch_size:
+    min: 32
+    max: 512
+
+  lr:
+    min: 1.0e-6
+    max: 1.0e-1
+
+  n_epochs:
+    min: 5
+    max: 10
+
+  embedding_dim:
+    min: 64
+    max: 1024
+
+  hidden_dim:
+    min: 512
+    max: 4096
+
   dataset_path: data/debug_dataset.pt
-  vectorized_dataset_path: none
+
   n_trials: 2
 
 trimnet:
-  batch_size: [32, 64, 128]
-  lr: [0.005, 0.001, 0.0005]
-  n_epochs: [5, 10]
-  hidden_dim: [128, 256, 512]
+  batch_size:
+    min: 32
+    max: 512
+
+  lr:
+    min: 1.0e-6
+    max: 1.0e-1
+
+  n_epochs:
+    min: 5
+    max: 10
+
+  hidden_dim:
+    min: 512
+    max: 4096
+
   dataset_path: data/debug_dataset.pt
-  vectorized_dataset_path: none
+
   n_trials: 2
 
 3d_infomax:
-  batch_size: [32, 64, 128]
-  lr: [0.005, 0.001, 0.0005]
-  n_epochs: [5, 10]
-  hidden_dim: [128, 256, 512]
+  batch_size:
+    min: 32
+    max: 512
+
+  lr:
+    min: 1.0e-6
+    max: 1.0e-1
+
+  n_epochs:
+    min: 5
+    max: 10
+
+  hidden_dim:
+    min: 512
+    max: 4096
+
   dataset_path: data/debug_dataset.pt
-  vectorized_dataset_path: none
+
   n_trials: 2
