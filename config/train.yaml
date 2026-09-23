@@ -1,6 +1,6 @@
 batch_size: 128
-lr: 0.00000001
-n_epochs: 10
-embedding_dim: 64
-hidden_dim: 128
+lr: 7.8e-5
+n_epochs: 50
+embedding_dim: 394
+hidden_dim: 1355
 dataset_path: data/droparray_full.pt
