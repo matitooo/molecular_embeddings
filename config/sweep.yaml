@@ -1,15 +1,11 @@
 graph:
-  batch_size:
-    min: 32
-    max: 512
+  batch_size: 128
 
   lr:
     min: 1.0e-6
     max: 1.0e-1
 
-  n_epochs:
-    min: 5
-    max: 10
+  n_epochs: 50
 
   embedding_dim:
     min: 64
@@ -19,48 +15,40 @@ graph:
     min: 512
     max: 4096
 
-  dataset_path: data/debug_dataset.pt
+  dataset_path: data/droparray_full.pt
 
-  n_trials: 2
+  n_trials: 50
 
 trimnet:
-  batch_size:
-    min: 32
-    max: 512
+  batch_size: 128
 
   lr:
     min: 1.0e-6
     max: 1.0e-1
 
-  n_epochs:
-    min: 5
-    max: 10
+  n_epochs: 50
 
   hidden_dim:
     min: 512
     max: 4096
 
-  dataset_path: data/debug_dataset.pt
+  dataset_path: data/droparray_full.pt
 
-  n_trials: 2
+  n_trials: 50
 
 3d_infomax:
-  batch_size:
-    min: 32
-    max: 512
+  batch_size: 128
 
   lr:
     min: 1.0e-6
     max: 1.0e-1
 
-  n_epochs:
-    min: 5
-    max: 10
+  n_epochs: 50
 
   hidden_dim:
     min: 512
     max: 4096
 
-  dataset_path: data/debug_dataset.pt
+  dataset_path: data/droparray_full.pt
 
-  n_trials: 2
+  n_trials: 50

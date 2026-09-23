@@ -18,11 +18,7 @@ def objective_graph(trial, debug_flag=False):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    batch_size = trial.suggest_int(
-        "batch_size",
-        sweep_config['batch_size']['min'],
-        sweep_config['batch_size']['max']
-    )
+    batch_size = trial.suggest_categorical('batch_size',[sweep_config['batch_size']])
 
     lr = trial.suggest_float(
         "lr",
@@ -31,11 +27,7 @@ def objective_graph(trial, debug_flag=False):
         log=True
     )
 
-    n_epochs = trial.suggest_int(
-        "n_epochs",
-        sweep_config['n_epochs']['min'],
-        sweep_config['n_epochs']['max']
-    )
+    
 
     embedding_dim = trial.suggest_int(
         "embedding_dim",
@@ -52,9 +44,17 @@ def objective_graph(trial, debug_flag=False):
     print('Loading Dataset and Vectorizing Molecules')
 
     if debug_flag:
-        dataset = DropArray('data/debug_dataset.pt')
+        dataset_path = trial.suggest_categorical('dataset_path',['data/debug_dataset.pt'])
+        dataset = DropArray(
+            'data/debug_dataset.pt'
+        )
+        n_epochs = trial.suggest_categorical('n_epochs',[1])
     else:
-        dataset = DropArray(sweep_config['dataset_path'])
+        dataset_path = trial.suggest_categorical('dataset_path',[sweep_config['dataset_path']])
+        dataset = DropArray(
+            sweep_config['dataset_path']
+        )
+        n_epochs = trial.suggest_categorical('n_epochs',[sweep_config['n_epochs']])
 
     collate_fn = partial(
         batch_instances_graph,
@@ -140,11 +140,7 @@ def objective_trimnet(trial, debug_flag=False):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    batch_size = trial.suggest_int(
-        "batch_size",
-        sweep_config['batch_size']['min'],
-        sweep_config['batch_size']['max']
-    )
+    batch_size = trial.suggest_categorical('batch_size',[sweep_config['batch_size']])
 
     lr = trial.suggest_float(
         "lr",
@@ -153,11 +149,6 @@ def objective_trimnet(trial, debug_flag=False):
         log=True
     )
 
-    n_epochs = trial.suggest_int(
-        "n_epochs",
-        sweep_config['n_epochs']['min'],
-        sweep_config['n_epochs']['max']
-    )
 
     hidden_dim = trial.suggest_int(
         "hidden_dim",
@@ -168,15 +159,19 @@ def objective_trimnet(trial, debug_flag=False):
     print('Loading Dataset and Vectorizing Molecules')
 
     if debug_flag:
+        dataset_path = trial.suggest_categorical('dataset_path',['data/debug_dataset.pt'])
         dataset = DropArray(
             'data/debug_dataset.pt',
             model='trimnet'
         )
+        n_epochs = trial.suggest_categorical('n_epochs',[1])
     else:
+        dataset_path = trial.suggest_categorical('dataset_path',[sweep_config['dataset_path']])
         dataset = DropArray(
             sweep_config['dataset_path'],
             model='trimnet'
         )
+        n_epochs = trial.suggest_categorical('n_epochs',[sweep_config['n_epochs']])
 
     collate_fn = partial(
         batch_instances_embedding,
@@ -243,23 +238,13 @@ def objective_3d_infomax(trial, debug_flag=False):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    batch_size = trial.suggest_int(
-        "batch_size",
-        sweep_config['batch_size']['min'],
-        sweep_config['batch_size']['max']
-    )
+    batch_size = trial.suggest_categorical('batch_size',[sweep_config['batch_size']])
 
     lr = trial.suggest_float(
         "lr",
         sweep_config['lr']['min'],
         sweep_config['lr']['max'],
         log=True
-    )
-
-    n_epochs = trial.suggest_int(
-        "n_epochs",
-        sweep_config['n_epochs']['min'],
-        sweep_config['n_epochs']['max']
     )
 
     hidden_dim = trial.suggest_int(
@@ -271,15 +256,19 @@ def objective_3d_infomax(trial, debug_flag=False):
     print('Loading Dataset and Vectorizing Molecules')
 
     if debug_flag:
+        dataset_path = trial.suggest_categorical('dataset_path',['data/debug_dataset.pt'])
         dataset = DropArray(
             'data/debug_dataset.pt',
             model='3d_infomax'
         )
+        n_epochs = trial.suggest_categorical('n_epochs',[1])
     else:
+        dataset_path = trial.suggest_categorical('dataset_path',[sweep_config['dataset_path']])
         dataset = DropArray(
             sweep_config['dataset_path'],
             model='3d_infomax'
         )
+        n_epochs = trial.suggest_categorical('n_epochs',[sweep_config['n_epochs']])
 
     collate_fn = partial(
         batch_instances_embedding,
@@ -341,46 +330,96 @@ def objective_3d_infomax(trial, debug_flag=False):
 
 
 def run_sweep(model_type, debug_flag=False):
-    with open("config/sweep.yaml", "r") as f:
+    with open('config/sweep.yaml', 'r') as f:
         sweep_config = yaml.safe_load(f)[model_type]
 
-    study = optuna.create_study(direction="minimize")
-
     objectives = {
-        "graph": objective_graph,
-        "trimnet": objective_trimnet,
-        "3d_infomax": objective_3d_infomax,
+        'graph': objective_graph,
+        'trimnet': objective_trimnet,
+        '3d_infomax': objective_3d_infomax,
     }
 
     if model_type not in objectives:
-        raise ValueError(f"Unknown model_type: {model_type}")
+        raise ValueError(f'Unknown model_type: {model_type}')
 
-    study.optimize(
-        lambda trial: objectives[model_type](
-            trial,
-            debug_flag=debug_flag
-        ),
-        n_trials=sweep_config["n_trials"]
+    os.makedirs('results/optuna', exist_ok=True)
+    os.makedirs('results/best_configurations', exist_ok=True)
+
+    study_name = (
+        f'{model_type}_new_drugs_fold0_debug'
+        if debug_flag
+        else f'{model_type}_new_drugs_fold0'
     )
 
-    output_path = f"best_configurations/{model_type}_best_params.json"
+    study = optuna.create_study(
+        study_name=study_name,
+        storage='sqlite:///results/optuna/optuna.db',
+        load_if_exists=True,
+        direction='minimize'
+    )
 
-    os.makedirs("best_configurations", exist_ok=True)
+    target_trials = 1 if debug_flag else sweep_config['n_trials']
+
+    completed_trials = sum(
+        trial.state == optuna.trial.TrialState.COMPLETE
+        for trial in study.trials
+    )
+
+    remaining_trials = max(
+        0,
+        target_trials - completed_trials
+    )
+
+    print(f'Study: {study_name}')
+    print(f'Completed trials: {completed_trials}/{target_trials}')
+    print(f'Remaining trials: {remaining_trials}')
+
+    if remaining_trials > 0:
+        study.optimize(
+            lambda trial: objectives[model_type](
+                trial,
+                debug_flag=debug_flag
+            ),
+            n_trials=remaining_trials,
+            catch=(torch.cuda.OutOfMemoryError,)
+        )
+
+    completed_trials = [
+        trial
+        for trial in study.trials
+        if trial.state == optuna.trial.TrialState.COMPLETE
+        and trial.value is not None
+    ]
+
+    if not completed_trials:
+        raise RuntimeError(
+            f'No completed trials available for study {study_name}.'
+        )
+
+    output_path = (
+        f'results/best_configurations/'
+        f'{model_type}_best_params.json'
+    )
 
     result = {
-        "model_type": model_type,
-        "best_score": study.best_value,
-        "best_params": study.best_params,
+        'model_type': model_type,
+        'study_name': study_name,
+        'best_trial': study.best_trial.number,
+        'best_score': study.best_value,
+        'best_params': study.best_params,
     }
 
-    with open(output_path, "w") as f:
+    with open(output_path, 'w') as f:
         json.dump(result, f, indent=4)
 
     create_yaml_from_params(output_path)
+
     dump_study_statistics(
         study,
         model_type,
-        "sweep_statistics"
+        'results/sweep_statistics'
     )
 
-    print(f"Saved best configuration to: {output_path}")
+    print(f'Best trial: {study.best_trial.number}')
+    print(f'Best validation loss: {study.best_value}')
+    print(f'Saved best configuration to: {output_path}')

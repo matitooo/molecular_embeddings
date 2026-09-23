@@ -58,7 +58,7 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
     if k_fold:
 
         scores = {}
-        os.makedirs(f'trained_model_weights/{model_type}', exist_ok=True)
+        os.makedirs(f'results/trained_model_weights/{model_type}', exist_ok=True)
 
         for fold in range(1,10):
             
@@ -71,7 +71,7 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
 
             train_loader = torch.utils.data.DataLoader(
                 train,
-                batch_size=128,
+                batch_size=config['batch_size'],
                 num_workers=0,
                 collate_fn=collate_fn,
                 shuffle=True
@@ -79,7 +79,7 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
 
             test_loader = torch.utils.data.DataLoader(
                 test,
-                batch_size=128,
+                batch_size=config['batch_size'],
                 num_workers=0,
                 collate_fn=collate_fn,
                 shuffle=False
@@ -154,7 +154,7 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
             # ----------------------------------------------------
             # Save model
             # ----------------------------------------------------
-            w_path = f'trained_model_weights/{model_type}/{fold}.pt'
+            w_path = f'results/trained_model_weights/{model_type}/{fold}.pt'
 
             torch.save(
                 trained_model.state_dict(),
@@ -165,7 +165,7 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
             print(f'Fold {fold} completed')
             print(f'Validation loss: {val_loss}')
 
-        os.makedirs("training_statistics", exist_ok=True)
+        os.makedirs("results/training_statistics", exist_ok=True)
 
         scores_values = list(scores.values())
 
@@ -178,7 +178,7 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
             "config": config
         }
 
-        stats_path = f"training_statistics/{model_type}.json"
+        stats_path = f"results/training_statistics/{model_type}.json"
 
         with open(stats_path, "w") as f:
             json.dump(training_stats, f, indent=4)
@@ -201,7 +201,7 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
 
         train_loader = torch.utils.data.DataLoader(
             train,
-            batch_size=128,
+            batch_size=config['batch_size'],
             num_workers=0,
             collate_fn=collate_fn,
             shuffle=True
@@ -209,7 +209,7 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
 
         test_loader = torch.utils.data.DataLoader(
             test,
-            batch_size=128,
+            batch_size=config['batch_size'],
             num_workers=0,
             collate_fn=collate_fn,
             shuffle=False
@@ -277,9 +277,9 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
             base_path=base_path
         )
 
-        os.makedirs('trained_model_weights', exist_ok=True)
+        os.makedirs('results/trained_model_weights', exist_ok=True)
 
-        w_path = f'trained_model_weights/{model_type}.pt'
+        w_path = f'results/trained_model_weights/{model_type}.pt'
 
         torch.save(
             trained_model.state_dict(),
@@ -287,7 +287,7 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
         )
 
         with open(
-            f'trained_model_weights/{model_type}_score.txt',
+            f'results/trained_model_weights/{model_type}_score.txt',
             'w'
         ) as f:
             print(val_loss, file=f)

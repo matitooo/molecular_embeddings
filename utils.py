@@ -4,6 +4,11 @@ from tqdm import tqdm
 from torch_geometric.data import Batch
 from graph_utils import *
 import json
+import os
+import yaml
+import optuna
+from datetime import datetime
+
 
 
 
@@ -201,7 +206,7 @@ def batch_instances_embedding(instances, drug_embedding_dict):
 
 
 def compute_base_path(model_type,config,fold = None):
-    pth = 'predictions/'
+    pth = 'results/predictions/'
     pth += model_type
     pth += "/"
     for value in config.values():
@@ -215,7 +220,7 @@ def compute_base_path(model_type,config,fold = None):
 
 
 def compute_base_path_sweep(model_type,params):
-    pth = 'sweep_predictions/'
+    pth = 'results/sweep_predictions/'
     pth += model_type
     pth += "/"
     for value in params:
@@ -231,25 +236,11 @@ def create_yaml_from_params(params_path):
         data = json.load(f)
 
     config = data["best_params"]
-    config.update({
-    "dataset_path": "data/debug_dataset.pt",
-    "vectorized_dataset_path": None
-})
 
-    name = f"best_configurations/{data['model_type']}_config.yaml"
+    name = f"results/best_configurations/{data['model_type']}_config.yaml"
     with open(name, "w") as f:
         yaml.dump(config, f, sort_keys=False)
 
-
-
-
-
-import os
-import json
-import yaml
-import optuna
-import numpy as np
-from datetime import datetime
 
 
 def _json_safe(value):
@@ -264,7 +255,7 @@ def _json_safe(value):
     return value
 
 
-def dump_study_statistics(study, model_type, output_dir="sweep_statistics"):
+def dump_study_statistics(study, model_type, output_dir="results/sweep_statistics"):
     os.makedirs(output_dir, exist_ok=True)
 
     completed_trials = [
