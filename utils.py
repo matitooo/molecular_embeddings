@@ -20,19 +20,21 @@ def masked_mse(pred, target, mask):
     return loss.sum() / mask.sum()
 
 
-def batch_instances_graph(instances, drug_graph_dict):
+def batch_instances_graph(instances, drug_graph_dict, max_exp):
     """
     Creates batched instances when a graph model is selected.
     Produces:
-        batch.z          -> (B, max_drugs, max_exp)
-        batch.mask       -> (B, max_exp)
+        batch.z          -> (B, max_drugs, T_global)
+        batch.mask       -> (B, T_global)
         batch.drug_mask  -> (B, max_drugs)
         batch.mol_batches
     """
 
     B = len(instances)
 
-    max_exp = max(inst.z.shape[1] for inst in instances)
+    if max_exp < 1:
+        raise ValueError(f"max_exp must be >= 1, got {max_exp}")
+
     max_drugs = max(inst.z.shape[0] for inst in instances)
 
     instances_ = []
@@ -125,11 +127,11 @@ def batch_instances_graph(instances, drug_graph_dict):
 
     return batch
 
-def batch_instances_embedding(instances, drug_embedding_dict):
+def batch_instances_embedding(instances, drug_embedding_dict, max_exp):
     """
     Batched version for precomputed drug embeddings.
     Produces:
-        batch.z -> (B, max_drugs, max_exp)
+        batch.z -> (B, max_drugs, T_global)
         batch.mask -> (B, max_exp)
         batch.mol_batches -> list of dicts with:
             emb: (B, emb_dim) per slot
@@ -138,7 +140,10 @@ def batch_instances_embedding(instances, drug_embedding_dict):
 
     B = len(instances)
 
-    max_l = max(inst.z.shape[1] for inst in instances)
+    if max_exp < 1:
+        raise ValueError(f"max_exp must be >= 1, got {max_exp}")
+
+    max_l = max_exp
     max_drugs = max(inst.x.shape[0] for inst in instances)
 
     instances_ = []

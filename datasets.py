@@ -26,6 +26,21 @@ class TreatmentDataset():
 class DropArray(TreatmentDataset):
     def __init__(self,dataset_path,model='graph'):
         self.dataset = torch.load(dataset_path,weights_only = False)
+
+        # Global number of experiments (T) used by every DataLoader batch.
+        # Keeping this value at dataset level prevents each batch from
+        # choosing a different padded T.
+        try:
+            self.max_exp = max(
+                int(instance.z.shape[1])
+                for instance in self.dataset["x"]
+            )
+        except (KeyError, AttributeError, TypeError, ValueError) as exc:
+            raise ValueError(
+                "Unable to determine the global number of experiments "
+                "from dataset['x']."
+            ) from exc
+
         self.C = None
         self.num_c_embeddings = len(self.dataset["cell_map"])
         self.target_dim = 1

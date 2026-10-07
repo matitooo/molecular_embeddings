@@ -40,13 +40,15 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
     if model_type == 'trimnet' or model_type == '3d_infomax':
         collate_fn = partial(
             batch_instances_embedding,
-            drug_embedding_dict=dataset.drug_embedding_dict
+            drug_embedding_dict=dataset.drug_embedding_dict,
+            max_exp=dataset.max_exp
         )
 
     elif model_type == 'graph':
         collate_fn = partial(
             batch_instances_graph,
-            drug_graph_dict=dataset.drug_graph_dict
+            drug_graph_dict=dataset.drug_graph_dict,
+            max_exp=dataset.max_exp
         )
 
     else:
