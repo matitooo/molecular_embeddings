@@ -58,7 +58,8 @@ def objective_graph(trial, debug_flag=False):
 
     collate_fn = partial(
         batch_instances_graph,
-        drug_graph_dict=dataset.drug_graph_dict
+        drug_graph_dict=dataset.drug_graph_dict,
+        max_exp=dataset.max_exp
     )
 
     train, test = dataset.get_split(
@@ -175,7 +176,8 @@ def objective_trimnet(trial, debug_flag=False):
 
     collate_fn = partial(
         batch_instances_embedding,
-        drug_embedding_dict=dataset.drug_embedding_dict
+        drug_embedding_dict=dataset.drug_embedding_dict,
+        max_exp=dataset.max_exp
     )
 
     train, test = dataset.get_split(
@@ -272,7 +274,8 @@ def objective_3d_infomax(trial, debug_flag=False):
 
     collate_fn = partial(
         batch_instances_embedding,
-        drug_embedding_dict=dataset.drug_embedding_dict
+        drug_embedding_dict=dataset.drug_embedding_dict,
+        max_exp=dataset.max_exp
     )
 
     train, test = dataset.get_split(
