@@ -9,8 +9,14 @@ from graph_utils import return_dicts
 import os
 import numpy as np
 import json
+import logging
+import time
 
-def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
+logger = logging.getLogger('pipeline.debug.train')
+
+def run_train(model_type, k_fold=False, custom_config=None, debug_flag=False, smoke_test=False):
+    started = time.monotonic()
+    logger.info('Training start: model=%s k_fold=%s smoke_test=%s', model_type, k_fold, smoke_test)
     # load config
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -19,22 +25,29 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
     else:
         config_path = 'config/train.yaml'
 
+    logger.info('Reading training config: %s', os.path.abspath(config_path))
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
+    logger.info('Config loaded: %s', config)
+    logger.info('Selected device: %s; torch=%s; cuda_available=%s', device, torch.__version__, torch.cuda.is_available())
 
 
     # load and preprocess data
     print('Loading Dataset and Vectorizing Molecules')
-    if debug_flag:
+    dataset_path = 'data/debug_dataset.pt' if smoke_test else config['dataset_path']
+    logger.info('Loading dataset path=%s (smoke_test=%s)', os.path.abspath(dataset_path), smoke_test)
+    if smoke_test:
         dataset = DropArray(
-            'data/debug_dataset.pt',
+            dataset_path,
             model=model_type
         )
     else:
         dataset = DropArray(
-            config['dataset_path'],
+            dataset_path,
             model=model_type
         )
+
+    logger.info('Dataset ready: instances=%s max_exp=%s cells=%s molecules=%s', len(dataset.dataset.get('x', [])), dataset.max_exp, dataset.num_c_embeddings, len(dataset.smiles_dict))
 
     # define collate function
     if model_type == 'trimnet' or model_type == '3d_infomax':
@@ -65,11 +78,13 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
         for fold in range(1,10):
             
             base_path = compute_base_path(model_type,config,int(fold))
+            logger.info('Creating split for fold %s/9', fold)
             train, test = dataset.get_split(
                 how="new_drugs",
                 fold=fold,
                 n_folds=10
             )
+            logger.info('Fold %s split sizes: train=%d test=%d', fold, len(train), len(test))
 
             train_loader = torch.utils.data.DataLoader(
                 train,
@@ -137,8 +152,10 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
                 lr=config['lr']
             )
 
+            logger.info('Fold %s model and optimizer initialized; train_batches=%d test_batches=%d', fold, len(train_loader), len(test_loader))
             print(f"\nNow training fold: {fold} of 9")
-            print('Training Model')
+            logger.info('Model and optimizer initialized; train_batches=%d test_batches=%d', len(train_loader), len(test_loader))
+        print('Training Model')
 
             # ----------------------------------------------------
             # Train
@@ -150,7 +167,8 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
                 train_loader,
                 test_loader,
                 config['n_epochs'],
-                base_path=base_path
+                base_path=base_path,
+                debug=debug_flag
             )
 
             # ----------------------------------------------------
@@ -197,9 +215,11 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
         print('\nTraining without k-fold')
 
         
+        logger.info('Creating train/test split')
         train, test = dataset.get_split(
             how="new_drugs"
         )
+        logger.info('Split sizes: train=%d test=%d', len(train), len(test))
 
         train_loader = torch.utils.data.DataLoader(
             train,
@@ -276,7 +296,8 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
             train_loader,
             test_loader,
             config['n_epochs'],
-            base_path=base_path
+            base_path=base_path,
+            debug=debug_flag
         )
 
         os.makedirs('results/trained_model_weights', exist_ok=True)
@@ -297,4 +318,5 @@ def run_train(model_type, k_fold=False,custom_config=None,debug_flag=False):
         print('\nTraining completed')
         print(f'Validation loss: {val_loss}')
         print(f'Model saved to: {w_path}')
+    logger.info('Training workflow completed in %.2fs', time.monotonic() - started)
 
