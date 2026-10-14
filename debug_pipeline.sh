@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Always run from the repository root, regardless of the caller's working directory.
+# Always run from the repository root, regardless of caller working directory.
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
@@ -26,7 +26,6 @@ if [[ ! -x "$VENV_DIR/bin/python" || ! -f "$VENV_DIR/bin/activate" ]]; then
     echo "ERROR: virtual environment was not created at $VENV_DIR" >&2
     exit 1
 fi
-# Use the venv's interpreter explicitly after activation to avoid picking up system Python.
 source "$VENV_DIR/bin/activate"
 hash -r
 python --version
@@ -38,5 +37,6 @@ for model in "${model_types[@]}"; do
     python main.py \
         --train \
         --model "$model" \
-        --kfold \\\n        --debug
+        --kfold \
+        --debug
 done
