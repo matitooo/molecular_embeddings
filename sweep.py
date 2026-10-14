@@ -12,7 +12,7 @@ import os
 import json
 
 
-def objective_graph(trial, debug_flag=False):
+def objective_graph(trial, debug_flag=False, smoke_test=False):
     with open('config/sweep.yaml', 'r') as f:
         sweep_config = yaml.safe_load(f)['graph']
 
@@ -43,7 +43,7 @@ def objective_graph(trial, debug_flag=False):
 
     print('Loading Dataset and Vectorizing Molecules')
 
-    if debug_flag:
+    if smoke_test:
         dataset_path = trial.suggest_categorical('dataset_path',['data/debug_dataset.pt'])
         dataset = DropArray(
             'data/debug_dataset.pt'
@@ -129,13 +129,14 @@ def objective_graph(trial, debug_flag=False):
         train_loader,
         test_loader,
         n_epochs,
-        base_path=base_path
+        base_path=base_path,
+        debug=debug_flag
     )
 
     return score
 
 
-def objective_trimnet(trial, debug_flag=False):
+def objective_trimnet(trial, debug_flag=False, smoke_test=False):
     with open('config/sweep.yaml', 'r') as f:
         sweep_config = yaml.safe_load(f)['trimnet']
 
@@ -159,7 +160,7 @@ def objective_trimnet(trial, debug_flag=False):
 
     print('Loading Dataset and Vectorizing Molecules')
 
-    if debug_flag:
+    if smoke_test:
         dataset_path = trial.suggest_categorical('dataset_path',['data/debug_dataset.pt'])
         dataset = DropArray(
             'data/debug_dataset.pt',
@@ -228,13 +229,14 @@ def objective_trimnet(trial, debug_flag=False):
         train_loader,
         test_loader,
         n_epochs,
-        base_path=base_path
+        base_path=base_path,
+        debug=debug_flag
     )
 
     return score
 
 
-def objective_3d_infomax(trial, debug_flag=False):
+def objective_3d_infomax(trial, debug_flag=False, smoke_test=False):
     with open('config/sweep.yaml', 'r') as f:
         sweep_config = yaml.safe_load(f)['3d_infomax']
 
@@ -257,7 +259,7 @@ def objective_3d_infomax(trial, debug_flag=False):
 
     print('Loading Dataset and Vectorizing Molecules')
 
-    if debug_flag:
+    if smoke_test:
         dataset_path = trial.suggest_categorical('dataset_path',['data/debug_dataset.pt'])
         dataset = DropArray(
             'data/debug_dataset.pt',
@@ -326,13 +328,14 @@ def objective_3d_infomax(trial, debug_flag=False):
         train_loader,
         test_loader,
         n_epochs,
-        base_path=base_path
+        base_path=base_path,
+        debug=debug_flag
     )
 
     return score
 
 
-def run_sweep(model_type, debug_flag=False):
+def run_sweep(model_type, debug_flag=False, smoke_test=False):
     with open('config/sweep.yaml', 'r') as f:
         sweep_config = yaml.safe_load(f)[model_type]
 
@@ -350,7 +353,7 @@ def run_sweep(model_type, debug_flag=False):
 
     study_name = (
         f'{model_type}_new_drugs_fold0_debug'
-        if debug_flag
+        if smoke_test
         else f'{model_type}_new_drugs_fold0'
     )
 
@@ -361,7 +364,7 @@ def run_sweep(model_type, debug_flag=False):
         direction='minimize'
     )
 
-    target_trials = 1 if debug_flag else sweep_config['n_trials']
+    target_trials = 1 if smoke_test else sweep_config['n_trials']
 
     completed_trials = sum(
         trial.state == optuna.trial.TrialState.COMPLETE
@@ -381,7 +384,8 @@ def run_sweep(model_type, debug_flag=False):
         study.optimize(
             lambda trial: objectives[model_type](
                 trial,
-                debug_flag=debug_flag
+                debug_flag=debug_flag,
+                smoke_test=smoke_test
             ),
             n_trials=remaining_trials,
             catch=(torch.cuda.OutOfMemoryError,)
