@@ -29,9 +29,9 @@ def run_train(model_type, k_fold=False, custom_config=None, debug_flag=False, sm
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     logger.info('Config loaded: %s', config)
-    if smoke_test:
+    if debug_flag or smoke_test:
         config['n_epochs'] = 1
-        logger.info('Smoke-test mode: using data/debug_dataset.pt and limiting training to one epoch')
+        logger.info('Debug/smoke-test mode: limiting training to one epoch')
     logger.info('Selected device: %s; torch=%s; cuda_available=%s', device, torch.__version__, torch.cuda.is_available())
 
 
