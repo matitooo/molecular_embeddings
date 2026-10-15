@@ -158,7 +158,7 @@ def run_train(model_type, k_fold=False, custom_config=None, debug_flag=False, sm
             logger.info('Fold %s model and optimizer initialized; train_batches=%d test_batches=%d', fold, len(train_loader), len(test_loader))
             print(f"\nNow training fold: {fold} of 9")
             logger.info('Model and optimizer initialized; train_batches=%d test_batches=%d', len(train_loader), len(test_loader))
-        print('Training Model')
+            print('Training Model')
 
             # ----------------------------------------------------
             # Train
