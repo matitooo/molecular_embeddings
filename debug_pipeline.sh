@@ -37,6 +37,5 @@ for model in "${model_types[@]}"; do
     python main.py \
         --train \
         --model "$model" \
-        --kfold \
         --debug
 done
