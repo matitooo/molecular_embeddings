@@ -1,33 +1,22 @@
 #!/usr/bin/env bash
-# Fresh-VM, one-epoch diagnostic run with quiet console and full log files.
+# Fresh-VM, sequential one-epoch diagnostics for all supported models.
 #
 # Usage:
 #   bash scripts/test_low_logging.sh
-#   MODEL=graph bash scripts/test_low_logging.sh
-#   MODEL=trimnet bash scripts/test_low_logging.sh
+#   MODELS="3d_infomax graph trimnet" bash scripts/test_low_logging.sh
 #
-# If .venv does not exist, runs installing/install.sh and logs its output.
-# Activates .venv, then runs one epoch WITHOUT --debug. config/train.yaml
-# and the dataset are not modified. Console output is intentionally minimal;
-# stdout/stderr from install and training are captured in results/logs/.
+# Installs dependencies if .venv is absent, activates it, and tests each model
+# in sequence WITHOUT --debug. Console output is minimal; each model has its
+# own log. config/train.yaml and the dataset are not modified.
 
 set -uo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MODEL="${MODEL:-3d_infomax}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 LOG_DIR="${REPO_DIR}/results/logs"
-LOG_FILE="${LOG_DIR}/${MODEL}-low-logging-${STAMP}.log"
 INSTALL_LOG="${LOG_DIR}/install-${STAMP}.log"
-TEMP_CONFIG="${LOG_DIR}/train-one-epoch-${STAMP}.yaml"
-
-case "${MODEL}" in
-  graph|3d_infomax|trimnet) ;;
-  *)
-    echo "ERROR: MODEL must be graph, 3d_infomax, or trimnet (got: ${MODEL})" >&2
-    exit 2
-    ;;
-esac
+SUMMARY_FILE="${LOG_DIR}/all-models-summary-${STAMP}.txt"
+MODELS="${MODELS:-3d_infomax graph trimnet}"
 
 cd "${REPO_DIR}"
 mkdir -p "${LOG_DIR}"
@@ -37,7 +26,7 @@ if [[ ! -f "installing/install.sh" ]]; then
   exit 2
 fi
 
-# On a fresh VM, install the project if the virtual environment is absent.
+# Install once on a fresh VM; reuse the environment for all three tests.
 if [[ ! -x ".venv/bin/python" ]]; then
   echo "Virtual environment not found; installing dependencies (output saved to ${INSTALL_LOG})..."
   if bash installing/install.sh >"${INSTALL_LOG}" 2>&1; then
@@ -58,7 +47,7 @@ if [[ ! -x ".venv/bin/python" ]]; then
   exit 2
 fi
 
-# Activate the project's virtual environment for this shell.
+# Activate the project's virtual environment.
 # shellcheck disable=SC1091
 source ".venv/bin/activate"
 
@@ -67,8 +56,35 @@ if [[ ! -f "data/droparray_full.pt" ]]; then
   exit 2
 fi
 
-# Create a temporary one-epoch config; leave config/train.yaml unchanged.
-if ! python - "${TEMP_CONFIG}" >"${LOG_DIR}/config-${STAMP}.log" 2>&1 <<'PY'
+# Do not let an inherited setting alter CUDA timing for this comparison.
+unset CUDA_LAUNCH_BLOCKING
+
+overall_status=0
+: > "${SUMMARY_FILE}"
+
+for MODEL in ${MODELS}; do
+  case "${MODEL}" in
+    graph|3d_infomax|trimnet) ;;
+    *)
+      echo "Skipping unsupported model: ${MODEL}" >&2
+      echo "${MODEL}: SKIPPED (unsupported model)" >> "${SUMMARY_FILE}"
+      overall_status=1
+      continue
+      ;;
+  esac
+
+  MODEL_STAMP="$(date +%Y%m%d-%H%M%S)"
+  LOG_FILE="${LOG_DIR}/${MODEL}-low-logging-${STAMP}.log"
+  TEMP_CONFIG="${LOG_DIR}/train-one-epoch-${MODEL}-${STAMP}.yaml"
+  CONFIG_LOG="${LOG_DIR}/config-${MODEL}-${STAMP}.log"
+
+  echo
+  echo "========== Starting model: ${MODEL} =========="
+  echo "One epoch; --debug disabled."
+  echo "Log: ${LOG_FILE}"
+
+  # Create an independent temporary one-epoch config for this model.
+  if ! python - "${TEMP_CONFIG}" >"${CONFIG_LOG}" 2>&1 <<'PY'
 import sys
 import yaml
 
@@ -78,25 +94,23 @@ config["n_epochs"] = 1
 with open(sys.argv[1], "w", encoding="utf-8") as f:
     yaml.safe_dump(config, f, sort_keys=False)
 PY
-then
-  echo "ERROR: failed to create temporary config; see ${LOG_DIR}/config-${STAMP}.log" >&2
-  exit 2
-fi
+  then
+    echo "ERROR: could not create temporary config; see ${CONFIG_LOG}" >&2
+    echo "${MODEL}: FAILED (config generation)" >> "${SUMMARY_FILE}"
+    overall_status=1
+    rm -f "${TEMP_CONFIG}"
+    continue
+  fi
 
-cleanup() {
-  rm -f "${TEMP_CONFIG}"
-}
-trap cleanup EXIT
-
-{
-  echo "Timestamp: $(date -Is)"
-  echo "Repo: ${REPO_DIR}"
-  echo "Branch: $(git branch --show-current 2>/dev/null || echo unknown)"
-  echo "Commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)"
-  echo "Model: ${MODEL}"
-  echo "Mode: one epoch; --debug disabled"
-  echo "Python: $(python --version 2>&1)"
-  python - <<'PY'
+  {
+    echo "Timestamp: $(date -Is)"
+    echo "Repo: ${REPO_DIR}"
+    echo "Branch: $(git branch --show-current 2>/dev/null || echo unknown)"
+    echo "Commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)"
+    echo "Model: ${MODEL}"
+    echo "Mode: one epoch; --debug disabled"
+    echo "Python: $(python --version 2>&1)"
+    python - <<'PY'
 import torch
 print("PyTorch:", torch.__version__)
 print("CUDA runtime:", torch.version.cuda)
@@ -104,50 +118,51 @@ print("CUDA available:", torch.cuda.is_available())
 if torch.cuda.is_available():
     print("GPU:", torch.cuda.get_device_name(0))
 PY
-  echo
-  echo "nvidia-smi:"
-  nvidia-smi 2>&1 || true
-  echo
-  echo "Starting training at $(date -Is)"
-} >"${LOG_FILE}" 2>&1
+    echo
+    echo "nvidia-smi:"
+    nvidia-smi 2>&1 || true
+    echo
+    echo "Starting training at $(date -Is)"
+  } >"${LOG_FILE}" 2>&1
 
-echo "Model: ${MODEL}"
-echo "One epoch, --debug disabled. Console output is kept minimal."
-echo "Training log: ${LOG_FILE}"
+  # Redirect directly to the per-model log; don't flood the terminal with
+  # per-batch output. faulthandler can still record Python fatal-signal traces.
+  PYTHONFAULTHANDLER=1 PYTHONUNBUFFERED=1 \
+    python -X faulthandler -u main.py \
+      --train \
+      --model "${MODEL}" \
+      --config "${TEMP_CONFIG}" \
+      >>"${LOG_FILE}" 2>&1
+  status=$?
 
-# Do not let an inherited setting alter CUDA timing for this comparison.
-unset CUDA_LAUNCH_BLOCKING
+  {
+    echo
+    echo "Training ended at $(date -Is)"
+    echo "Python exit code: ${status}"
+  } >>"${LOG_FILE}"
 
-# Redirect directly to a file instead of tee: no per-batch terminal flood.
-# faulthandler may write a Python traceback for fatal signals to this log.
-PYTHONFAULTHANDLER=1 PYTHONUNBUFFERED=1 \
-  python -X faulthandler -u main.py \
-    --train \
-    --model "${MODEL}" \
-    --config "${TEMP_CONFIG}" \
-    >>"${LOG_FILE}" 2>&1
-status=$?
+  rm -f "${TEMP_CONFIG}"
 
-{
-  echo
-  echo "Training ended at $(date -Is)"
-  echo "Python exit code: ${status}"
-} >>"${LOG_FILE}"
+  if [[ "${status}" -eq 0 ]]; then
+    echo "${MODEL}: PASS (exit 0)" | tee -a "${SUMMARY_FILE}"
+    echo "Last 12 log lines:"
+    tail -n 12 "${LOG_FILE}"
+  else
+    echo "${MODEL}: FAIL (exit ${status})" | tee -a "${SUMMARY_FILE}"
+    overall_status=1
+    echo "Last 80 log lines:"
+    tail -n 80 "${LOG_FILE}"
+    echo "Recent kernel messages (if permitted):"
+    dmesg -T 2>/dev/null | grep -Ei 'NVRM|Xid|segfault|oom|killed process' | tail -40 || true
+  fi
 
-echo "Exit code: ${status}"
-echo "Log saved to: ${LOG_FILE}"
+  echo "Full log: ${LOG_FILE}"
+done
 
-if [[ "${status}" -eq 0 ]]; then
-  echo "Last 25 log lines:"
-  tail -n 25 "${LOG_FILE}"
-else
-  echo "Run failed. Last 100 log lines:"
-  tail -n 100 "${LOG_FILE}"
-  echo
-  echo "Recent kernel messages (if permitted):"
-  dmesg -T 2>/dev/null | grep -Ei 'NVRM|Xid|segfault|oom|killed process' | tail -40 || true
-  echo
-  echo "Install log (if created): ${INSTALL_LOG}"
-fi
+echo
+echo "========== Test summary =========="
+cat "${SUMMARY_FILE}"
+echo "Summary file: ${SUMMARY_FILE}"
+echo "Install log (if installation ran): ${INSTALL_LOG}"
 
-exit "${status}"
+exit "${overall_status}"
