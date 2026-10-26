@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Full training with default config, minimal terminal output, and per-run logs.
+# Full k-fold training with default config, minimal terminal output, and per-run logs.
 #
 # Usage:
 #   bash scripts/run_full_training.sh
@@ -21,7 +21,7 @@ OUTPUT_DIR="$RUN_DIR/outputs"
 SUMMARY_FILE="$RUN_DIR/summary.txt"
 MODELS="${MODELS:-3d_infomax graph trimnet}"
 
-mkdir -p "$LOG_DIR" "$OUTPUT_DIR/predictions" "$OUTPUT_DIR/trained_model_weights"
+mkdir -p "$LOG_DIR" "$OUTPUT_DIR/predictions" "$OUTPUT_DIR/trained_model_weights" "$OUTPUT_DIR/training_statistics"
 exec > >(tee -a "$RUN_DIR/orchestrator.log") 2>&1
 
 say() { printf '[%s] %s\n' "$(date -Is)" "$*"; }
@@ -128,7 +128,7 @@ prepare_output_link() {
 }
 
 mkdir -p "$REPO_DIR/results"
-if ! prepare_output_link predictions || ! prepare_output_link trained_model_weights; then
+if ! prepare_output_link predictions || ! prepare_output_link trained_model_weights || ! prepare_output_link training_statistics; then
   say "ERROR: unable to prepare per-run output directories."
   exit 2
 fi
@@ -173,7 +173,7 @@ for MODEL in $MODELS; do
     echo "Branch: $(git branch --show-current 2>/dev/null || echo unknown)"
     echo "Commit: $(git rev-parse HEAD 2>/dev/null || echo unknown)"
     echo "Config: $REPO_DIR/config/train.yaml (used unchanged)"
-    echo "Mode: full training; --debug disabled; smoke test disabled; k-fold disabled"
+    echo "Mode: full k-fold training; --debug disabled; smoke test disabled; --kfold enabled"
     echo "Python: $(python --version 2>&1)"
     python - <<'PY'
 import torch
@@ -184,7 +184,7 @@ if torch.cuda.is_available():
     print("Current CUDA device:", torch.cuda.current_device())
     print("Current GPU:", torch.cuda.get_device_name(torch.cuda.current_device()))
 PY
-    echo "Command: python -X faulthandler -u main.py --train --model $MODEL --config config/train.yaml"
+    echo "Command: python -X faulthandler -u main.py --train --model $MODEL --config config/train.yaml --kfold"
     echo "Training starts: $(date -Is)"
     nvidia-smi 2>&1 || true
   } > "$MODEL_META" 2>&1
@@ -196,7 +196,7 @@ PY
 
   say "Starting full training for $MODEL. Training log: $TRAIN_LOG"
   PYTHONFAULTHANDLER=1 PYTHONUNBUFFERED=1 \
-    python -X faulthandler -u main.py --train --model "$MODEL" --config config/train.yaml \
+    python -X faulthandler -u main.py --train --model "$MODEL" --config config/train.yaml --kfold \
     > "$TRAIN_LOG" 2>&1 &
   TRAIN_PID=$!
   monitor_resources "$TRAIN_PID" "$RESOURCE_LOG" &
@@ -233,7 +233,7 @@ done
   echo "Finished: $(date -Is)"
   echo "Overall exit code: $overall_status"
   echo "Run directory: $RUN_DIR"
-  echo "Output directories: $OUTPUT_DIR/predictions and $OUTPUT_DIR/trained_model_weights"
+  echo "Output directories: $OUTPUT_DIR/predictions, $OUTPUT_DIR/trained_model_weights, and $OUTPUT_DIR/training_statistics"
 } >> "$SUMMARY_FILE"
 
 nvidia-smi -q > "$LOG_DIR/nvidia-smi-after.txt" 2>&1 || nvidia-smi > "$LOG_DIR/nvidia-smi-after.txt" 2>&1 || true
@@ -242,5 +242,5 @@ dmesg -T > "$LOG_DIR/kernel-messages-after-all.txt" 2>&1 || true
 find "$RUN_DIR" -type f ! -name manifest.txt -printf '%P\t%s bytes\n' 2>/dev/null | sort > "$RUN_DIR/manifest.txt"
 say "All training runs finished. Summary: $SUMMARY_FILE"
 say "Logs and model outputs are stored under: $RUN_DIR"
-say "results/predictions and results/trained_model_weights now point to this run's outputs."
+say "results/predictions, results/trained_model_weights, and results/training_statistics now point to this run's outputs."
 exit "$overall_status"
