@@ -1,8 +1,5 @@
-#Use this to quickly cleanup after a debugging training/sweeping round
-
-sudo rm -r predictions
-sudo rm -r sweep_predictions
-sudo rm -r sweep_statistics
-sudo rm -r trained_model_weights
-sudo rm -r training_statistics
-sudo rm -r best_configurations 
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' 'This cleanup helper is disabled: the previous version recursively deleted training outputs.' >&2
+printf '%s\n' 'Review the exact results directory before removing any generated files.' >&2
+exit 2
