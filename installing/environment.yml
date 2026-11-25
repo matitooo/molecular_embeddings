@@ -15,5 +15,3 @@ dependencies:
   - pytorch-cuda=12.1
   - rdkit
   - optuna
-  - torch_geometrid
-  - rdkit
