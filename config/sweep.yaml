@@ -1,8 +1,54 @@
-batch_size: [32, 64, 128]
-lr: [0.005, 0.001, 0.0005]
-n_epochs: [50, 100, 200]
-embedding_dim: [64, 128, 256]
-hidden_dim: [128, 256, 512]
-dataset_path: data/debug_dataset.pt
-vectorized_dataset_path: none
-n_trials: 50
+graph:
+  batch_size: 128
+
+  lr:
+    min: 1.0e-6
+    max: 1.0e-1
+
+  n_epochs: 50
+
+  embedding_dim:
+    min: 64
+    max: 1024
+
+  hidden_dim:
+    min: 512
+    max: 4096
+
+  dataset_path: data/droparray_full.pt
+
+  n_trials: 50
+
+trimnet:
+  batch_size: 128
+
+  lr:
+    min: 1.0e-6
+    max: 1.0e-1
+
+  n_epochs: 50
+
+  hidden_dim:
+    min: 512
+    max: 4096
+
+  dataset_path: data/droparray_full.pt
+
+  n_trials: 50
+
+3d_infomax:
+  batch_size: 128
+
+  lr:
+    min: 1.0e-6
+    max: 1.0e-1
+
+  n_epochs: 50
+
+  hidden_dim:
+    min: 512
+    max: 4096
+
+  dataset_path: data/droparray_full.pt
+
+  n_trials: 50

@@ -14,3 +14,4 @@ dependencies:
   - torchaudio=2.2.2
   - pytorch-cuda=12.1
   - rdkit
+  - optuna

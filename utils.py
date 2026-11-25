@@ -3,6 +3,11 @@ import torch
 from tqdm import tqdm
 from torch_geometric.data import Batch
 from graph_utils import *
+import json
+import os
+import yaml
+import optuna
+from datetime import datetime
 
 
 
@@ -15,19 +20,21 @@ def masked_mse(pred, target, mask):
     return loss.sum() / mask.sum()
 
 
-def batch_instances_graph(instances, drug_graph_dict):
+def batch_instances_graph(instances, drug_graph_dict, max_exp):
     """
     Creates batched instances when a graph model is selected.
     Produces:
-        batch.z          -> (B, max_drugs, max_exp)
-        batch.mask       -> (B, max_exp)
+        batch.z          -> (B, max_drugs, T_global)
+        batch.mask       -> (B, T_global)
         batch.drug_mask  -> (B, max_drugs)
         batch.mol_batches
     """
 
     B = len(instances)
 
-    max_exp = max(inst.z.shape[1] for inst in instances)
+    if max_exp < 1:
+        raise ValueError(f"max_exp must be >= 1, got {max_exp}")
+
     max_drugs = max(inst.z.shape[0] for inst in instances)
 
     instances_ = []
@@ -120,11 +127,11 @@ def batch_instances_graph(instances, drug_graph_dict):
 
     return batch
 
-def batch_instances_embedding(instances, drug_embedding_dict):
+def batch_instances_embedding(instances, drug_embedding_dict, max_exp):
     """
     Batched version for precomputed drug embeddings.
     Produces:
-        batch.z -> (B, max_drugs, max_exp)
+        batch.z -> (B, max_drugs, T_global)
         batch.mask -> (B, max_exp)
         batch.mol_batches -> list of dicts with:
             emb: (B, emb_dim) per slot
@@ -133,7 +140,10 @@ def batch_instances_embedding(instances, drug_embedding_dict):
 
     B = len(instances)
 
-    max_l = max(inst.z.shape[1] for inst in instances)
+    if max_exp < 1:
+        raise ValueError(f"max_exp must be >= 1, got {max_exp}")
+
+    max_l = max_exp
     max_drugs = max(inst.x.shape[0] for inst in instances)
 
     instances_ = []
@@ -198,3 +208,180 @@ def batch_instances_embedding(instances, drug_embedding_dict):
     batch.mol_batches = mol_batches
 
     return batch
+
+
+def compute_base_path(model_type,config,fold = None):
+    pth = 'results/predictions/'
+    pth += model_type
+    pth += "/"
+    for value in config.values():
+        if type(value) == int or type(value) == float:
+            pth += "_"
+            pth += str(value)
+    if fold:
+        pth+="/fold_"+str(fold)
+    return pth
+
+
+
+def compute_base_path_sweep(model_type,params):
+    pth = 'results/sweep_predictions/'
+    pth += model_type
+    pth += "/"
+    for value in params:
+        if type(value) == int or type(value) == float:
+            pth += "_"
+            pth += str(value)
+    return pth
+
+
+
+def create_yaml_from_params(params_path):
+    with open(params_path, 'r') as f:
+        data = json.load(f)
+
+    config = data["best_params"]
+
+    name = f"results/best_configurations/{data['model_type']}_config.yaml"
+    with open(name, "w") as f:
+        yaml.dump(config, f, sort_keys=False)
+
+
+
+def _json_safe(value):
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating,)):
+        return float(value)
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return value
+
+
+def dump_study_statistics(study, model_type, output_dir="results/sweep_statistics"):
+    os.makedirs(output_dir, exist_ok=True)
+
+    completed_trials = [
+        t for t in study.trials
+        if t.state == optuna.trial.TrialState.COMPLETE
+        and t.value is not None
+    ]
+
+    try:
+        param_importances = optuna.importance.get_param_importances(study)
+    except Exception:
+        param_importances = {}
+
+    trials_data = []
+
+    best_so_far = None
+
+    for trial in study.trials:
+
+        if trial.value is not None:
+            if best_so_far is None:
+                best_so_far = trial.value
+            else:
+                best_so_far = min(best_so_far, trial.value)
+
+        trial_data = {
+            "number": trial.number,
+            "state": trial.state.name,
+            "score": _json_safe(trial.value),
+            "params": {
+                k: _json_safe(v)
+                for k, v in trial.params.items()
+            },
+            "distributions": {
+                name: str(distribution)
+                for name, distribution in trial.distributions.items()
+            },
+            "datetime_start": (
+                trial.datetime_start.isoformat()
+                if trial.datetime_start else None
+            ),
+            "datetime_complete": (
+                trial.datetime_complete.isoformat()
+                if trial.datetime_complete else None
+            ),
+            "duration_seconds": (
+                trial.duration.total_seconds()
+                if trial.duration else None
+            ),
+            "best_score_so_far": _json_safe(best_so_far),
+            "user_attrs": {
+                k: _json_safe(v)
+                for k, v in trial.user_attrs.items()
+            },
+            "system_attrs": {
+                k: _json_safe(v)
+                for k, v in trial.system_attrs.items()
+            }
+        }
+
+        trials_data.append(trial_data)
+
+    scores = np.array(
+        [t.value for t in completed_trials],
+        dtype=float
+    )
+
+    if len(scores) > 0:
+        score_statistics = {
+            "count": int(len(scores)),
+            "min": float(np.min(scores)),
+            "max": float(np.max(scores)),
+            "mean": float(np.mean(scores)),
+            "median": float(np.median(scores)),
+            "std": float(np.std(scores)),
+            "variance": float(np.var(scores)),
+            "q25": float(np.quantile(scores, 0.25)),
+            "q75": float(np.quantile(scores, 0.75)),
+        }
+    else:
+        score_statistics = {}
+
+    result = {
+        "model_type": model_type,
+
+        "study": {
+            "study_name": study.study_name,
+            "direction": study.direction.name,
+            "sampler": type(study.sampler).__name__,
+            "pruner": type(study.pruner).__name__,
+            "n_trials": len(study.trials),
+            "n_completed_trials": len(completed_trials),
+        },
+
+        "best_trial": {
+            "number": study.best_trial.number,
+            "score": _json_safe(study.best_value),
+            "params": {
+                k: _json_safe(v)
+                for k, v in study.best_params.items()
+            }
+        },
+
+        "score_statistics": score_statistics,
+
+        "parameter_importance": {
+            k: float(v)
+            for k, v in param_importances.items()
+        },
+
+        "trials": trials_data
+    }
+
+    output_path = os.path.join(
+        output_dir,
+        f"{model_type}_sweep_statistics.json"
+    )
+
+    with open(output_path, "w") as f:
+        json.dump(result, f, indent=4)
+
+    print(f"Saved sweep statistics to: {output_path}")
+
+    return output_path
